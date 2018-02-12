@@ -1,2 +1,3 @@
 octodns>=0.8.0
 requests>=2.18.1
+fqdn>=1.1.0

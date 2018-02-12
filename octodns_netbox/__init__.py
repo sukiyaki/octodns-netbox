@@ -8,6 +8,7 @@ based on a NetBox API.
 from collections import defaultdict
 from requests import Session
 from ipaddress import IPv4Interface, IPv6Interface
+from fqdn import FQDN
 import logging
 
 try:
@@ -149,8 +150,11 @@ class NetboxSource(BaseSource):
                 name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
 
             # take the first fqdn
-            value = description.split(',')[0]
-            value += '.' if value[-1] != '.' else ''
+            for _fqdn in description.split(','):
+                fqdn = FQDN(_fqdn)
+                if fqdn.is_valid:
+                    value = fqdn.absolute
+                    break
 
             record = Record.new(zone, name, {
                     'ttl': self.ttl,
@@ -176,8 +180,11 @@ class NetboxSource(BaseSource):
             name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
 
             # take the first fqdn
-            value = description.split(',')[0]
-            value += '.' if value[-1] != '.' else ''
+            for _fqdn in description.split(','):
+                fqdn = FQDN(_fqdn)
+                if fqdn.is_valid:
+                    value = fqdn.absolute
+                    break
 
             record = Record.new(zone, name, {
                     'ttl': self.ttl,
@@ -194,11 +201,13 @@ class NetboxSource(BaseSource):
             description = ipam_record['description']
             family = ipam_record['family']
 
-            for fqdn in description.split(','):
-                fqdn += '.' if fqdn[-1] != '.' else ''
+            for _fqdn in description.split(','):
+                fqdn = FQDN(_fqdn)
+                if not fqdn.is_valid:
+                    continue
 
-                if fqdn.endswith(zone.name):
-                    name = zone.hostname_from_fqdn(fqdn)
+                if fqdn.absolute.endswith(zone.name):
+                    name = zone.hostname_from_fqdn(fqdn.absolute)
                     _type = 'A' if family == 4 else 'AAAA'
 
                     data[name][_type].append(ip_address)

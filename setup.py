@@ -14,7 +14,8 @@ setup(
     description=octodns_netbox.__doc__,
     install_require=[
         'octodns>=0.8.0',
-        'requests>=2.13.0'
+        'requests>=2.13.0',
+        'fqdn>=1.1.0'
     ],
     tests_require=[
         'mock',
