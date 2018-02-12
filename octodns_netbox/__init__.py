@@ -156,7 +156,7 @@ class NetboxSource(BaseSource):
 
             if zone_length > 3:
                 _name = '{}.{}'.format(
-                    ip_address.exploded.split('.')[-1], zone.name)
+                    ip_address.compressed.split('.')[-1], zone.name)
                 name = zone.hostname_from_fqdn(_name)
             else:
                 name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
@@ -229,7 +229,7 @@ class NetboxSource(BaseSource):
                         name = zone.hostname_from_fqdn(fqdn)
                         _type = 'A' if ip_address.version == 4 else 'AAAA'
 
-                        data[name][_type].append(ip_address.exploded)
+                        data[name][_type].append(ip_address.compressed)
 
         for name, types in data.items():
             for _type, d in types.items():
