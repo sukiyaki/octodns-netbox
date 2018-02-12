@@ -98,7 +98,7 @@ class NetboxSource(BaseSource):
         try:
             if zone != None:
                 self._ipam_records = \
-                    self._client.ipaddresses(zone_name=zone.name[:-1], family=family)
+                    self._client.ipaddresses(zone_name=zone.name[:-1])
             elif parent != None:
                 self._ipam_records = \
                     self._client.ipaddresses(parent=parent, family=family)
@@ -138,7 +138,7 @@ class NetboxSource(BaseSource):
                 parent += '.0'
             parent += '/{}'.format(8 * zone_length)
 
-        for ipam_record in self.ipam_records(zone=None, family=4, parent=parent):
+        for ipam_record in self.ipam_records(parent=parent, family=4):
             ip_address = IPv4Interface(ipam_record['address']).ip
             description = ipam_record['description']
 
@@ -169,7 +169,7 @@ class NetboxSource(BaseSource):
         parent = ':'.join([zone_reverse_str[i: i+4] for i in range(0, len(zone_reverse_str), 4)])
         parent += '::/{}'.format(zone_length * 4)
 
-        for ipam_record in self.ipam_records(zone=None, family=6, parent=parent):
+        for ipam_record in self.ipam_records(parent=parent, family=6):
             ip_address = IPv6Interface(ipam_record['address']).ip
             description = ipam_record['description']
 
