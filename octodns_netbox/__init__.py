@@ -175,7 +175,7 @@ class NetboxSource(BaseSource):
 
             name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
 
-            # take the longest fqdn
+            # take the first fqdn
             value = description.split(',')[0]
             value += '.' if value[-1] != '.' else ''
 
@@ -195,10 +195,13 @@ class NetboxSource(BaseSource):
             family = ipam_record['family']
 
             for fqdn in description.split(','):
-                name = zone.hostname_from_fqdn(fqdn)
-                _type = 'A' if family == 4 else 'AAAA'
+                fqdn += '.' if fqdn[-1] != '.' else ''
 
-                data[name][_type].append(ip_address)
+                if fqdn.endswith(zone.name):
+                    name = zone.hostname_from_fqdn(fqdn)
+                    _type = 'A' if family == 4 else 'AAAA'
+
+                    data[name][_type].append(ip_address)
 
         for name, types in data.items():
             for _type, d in types.items():
