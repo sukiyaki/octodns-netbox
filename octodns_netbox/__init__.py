@@ -161,9 +161,9 @@ class NetboxSource(BaseSource):
             # take the first fqdn
             fqdn = None
             for _fqdn in description.split(','):
-                if not is_valid_hostname(_fqdn):
-                    continue
-                fqdn = '{}.'.format(_fqdn)
+                if is_valid_hostname(_fqdn):
+                    fqdn = '{}.'.format(_fqdn)
+                    break
 
             if fqdn:
                 record = Record.new(zone, name, {
@@ -192,9 +192,9 @@ class NetboxSource(BaseSource):
             # take the first fqdn
             fqdn = None
             for _fqdn in description.split(','):
-                if not is_valid_hostname(_fqdn):
-                    continue
-                fqdn = '{}.'.format(_fqdn)
+                if is_valid_hostname(_fqdn):
+                    fqdn = '{}.'.format(_fqdn)
+                    break
 
             if fqdn:
                 record = Record.new(zone, name, {
@@ -213,9 +213,9 @@ class NetboxSource(BaseSource):
             family = ipam_record['family']
 
             for fqdn in description.split(','):
-                if not is_valid_hostname(fqdn):
-                    continue
-                fqdn = '{}.'.format(fqdn)
+                if is_valid_hostname(fqdn):
+                    fqdn = '{}.'.format(fqdn)
+                    break
 
                 if fqdn.endswith(zone.name):
                     name = zone.hostname_from_fqdn(fqdn)
