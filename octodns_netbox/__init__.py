@@ -7,7 +7,7 @@ based on a NetBox API.
 
 from collections import defaultdict
 from requests import Session
-from ipaddress import IPv4Interface, IPv6Interface
+from ipaddress import ip_interface
 import re
 import logging
 
@@ -21,27 +21,27 @@ from octodns.source.base import BaseSource
 
 __VERSION__ = 0.1
 
+
 # https://stackoverflow.com/a/2532344
 def is_valid_hostname(hostname):
     if len(hostname) > 255:
         return False
     if hostname[-1] == ".":
-        hostname = hostname[:-1] # strip exactly one dot from the right, if present
+        hostname = hostname[:-1]
     allowed = re.compile("(?!-)[A-Z\d-]{1,63}(?<!-)$", re.IGNORECASE)
     return all(allowed.match(x) for x in hostname.split("."))
+
 
 class NetboxClientException(Exception):
     pass
 
 
 class NetboxClientNotFound(NetboxClientException):
-
     def __init__(self):
         super(NetboxClientNotFound, self).__init__('Not found')
 
 
 class NetboxClientUnauthorized(NetboxClientException):
-
     def __init__(self):
         super(NetboxClientUnauthorized, self).__init__('Unauthorized')
 
@@ -71,8 +71,10 @@ class NetboxClient(object):
         parent = quote_plus(parent) if parent != '' else ''
 
         while True:
-            data = self._request('GET', '/ipam/ip-addresses/?limit={}&offset={}&q={}&family={}&parent={}'
-                                    .format(limit, offset, zone_name, family, parent)).json()
+            data = self._request(
+                'GET',
+                '/ipam/ip-addresses/?limit={}&offset={}&q={}&family={}&parent={}'
+                .format(limit, offset, zone_name, family, parent)).json()
             ret += data['results']
             if data['next'] == None:
                 break
@@ -133,7 +135,7 @@ class NetboxSource(BaseSource):
             self._populate_normal(zone, lenient)
 
         self.log.info('populate:   found %s records',
-            len(zone.records) - before)
+                      len(zone.records) - before)
 
     def _populate_PTRv4(self, zone, lenient):
         zone_length = len(zone.name.split('.')[:-3])
@@ -149,11 +151,12 @@ class NetboxSource(BaseSource):
             parent += '/{}'.format(8 * zone_length)
 
         for ipam_record in self.ipam_records(parent=parent, family=4):
-            ip_address = IPv4Interface(ipam_record['address']).ip
+            ip_address = ip_interface(ipam_record['address']).ip
             description = ipam_record['description']
 
             if zone_length > 3:
-                _name = '{}.{}'.format(ip_address.exploded.split('.')[-1], zone.name)
+                _name = '{}.{}'.format(
+                    ip_address.exploded.split('.')[-1], zone.name)
                 name = zone.hostname_from_fqdn(_name)
             else:
                 name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
@@ -166,11 +169,13 @@ class NetboxSource(BaseSource):
                     break
 
             if fqdn:
-                record = Record.new(zone, name, {
-                    'ttl': self.ttl,
-                    'type': 'PTR',
-                    'value': fqdn
-                }, source=self, lenient=lenient)
+                record = Record.new(
+                    zone,
+                    name, {'ttl': self.ttl,
+                           'type': 'PTR',
+                           'value': fqdn},
+                    source=self,
+                    lenient=lenient)
                 zone.add_record(record)
 
     def _populate_PTRv6(self, zone, lenient):
@@ -180,11 +185,14 @@ class NetboxSource(BaseSource):
         if len(zone_reverse_str) % 4 != 0:
             for i in range(4 - (len(zone_reverse_str) % 4)):
                 zone_reverse_str += '0'
-        parent = ':'.join([zone_reverse_str[i: i+4] for i in range(0, len(zone_reverse_str), 4)])
+        parent = ':'.join([
+            zone_reverse_str[i:i + 4]
+            for i in range(0, len(zone_reverse_str), 4)
+        ])
         parent += '::/{}'.format(zone_length * 4)
 
         for ipam_record in self.ipam_records(parent=parent, family=6):
-            ip_address = IPv6Interface(ipam_record['address']).ip
+            ip_address = ip_interface(ipam_record['address']).ip
             description = ipam_record['description']
 
             name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
@@ -197,39 +205,41 @@ class NetboxSource(BaseSource):
                     break
 
             if fqdn:
-                record = Record.new(zone, name, {
-                    'ttl': self.ttl,
-                    'type': 'PTR',
-                    'value': fqdn
-                }, source=self, lenient=lenient)
+                record = Record.new(
+                    zone,
+                    name, {'ttl': self.ttl,
+                           'type': 'PTR',
+                           'value': fqdn},
+                    source=self,
+                    lenient=lenient)
                 zone.add_record(record)
 
     def _populate_normal(self, zone, lenient):
         data = defaultdict(lambda: defaultdict(list))
 
         for ipam_record in self.ipam_records(zone):
-            ip_address = ipam_record['address'].split('/')[0]
+            ip_address = ip_interface(ipam_record['address']).ip
             description = ipam_record['description']
-            family = ipam_record['family']
 
-            for fqdn in description.split(','):
-                if is_valid_hostname(fqdn):
-                    fqdn = '{}.'.format(fqdn)
-                    break
+            for _fqdn in description.split(','):
+                if is_valid_hostname(_fqdn):
+                    fqdn = '{}.'.format(_fqdn)
 
-                if fqdn.endswith(zone.name):
-                    name = zone.hostname_from_fqdn(fqdn)
-                    _type = 'A' if family == 4 else 'AAAA'
+                    if fqdn.endswith(zone.name):
+                        name = zone.hostname_from_fqdn(fqdn)
+                        _type = 'A' if ip_address.version == 4 else 'AAAA'
 
-                    data[name][_type].append(ip_address)
+                        data[name][_type].append(ip_address.exploded)
 
         for name, types in data.items():
             for _type, d in types.items():
-                record = Record.new(zone, name, {
-                    'ttl': self.ttl,
-                    'type': _type,
-                    'values': d
-                }, source=self, lenient=lenient)
+                record = Record.new(
+                    zone,
+                    name, {'ttl': self.ttl,
+                           'type': _type,
+                           'values': d},
+                    source=self,
+                    lenient=lenient)
                 try:
                     zone.add_record(record)
                 except SubzoneRecordException:
