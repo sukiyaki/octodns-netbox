@@ -149,15 +149,19 @@ class NetboxSource(BaseSource):
                 name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
 
             # take the first fqdn
-            value = description.split(',')[0]
-            value += '.' if value[-1] != '.' else ''
+            fqdn = None
+            for _fqdn in description.split(','):
+                if not is_valid_hostname(_fqdn):
+                    continue
+                fqdn = '{}.'.format(_fqdn)
 
-            record = Record.new(zone, name, {
+            if fqdn:
+                record = Record.new(zone, name, {
                     'ttl': self.ttl,
                     'type': 'PTR',
-                    'value': value
-            }, source=self, lenient=lenient)
-            zone.add_record(record)
+                    'value': fqdn
+                }, source=self, lenient=lenient)
+                zone.add_record(record)
 
     def _populate_PTRv6(self, zone, lenient):
         zone_length = len(zone.name.split('.')[:-3])
@@ -176,15 +180,19 @@ class NetboxSource(BaseSource):
             name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
 
             # take the first fqdn
-            value = description.split(',')[0]
-            value += '.' if value[-1] != '.' else ''
+            fqdn = None
+            for _fqdn in description.split(','):
+                if not is_valid_hostname(_fqdn):
+                    continue
+                fqdn = '{}.'.format(_fqdn)
 
-            record = Record.new(zone, name, {
+            if fqdn:
+                record = Record.new(zone, name, {
                     'ttl': self.ttl,
                     'type': 'PTR',
-                    'value': value
-            }, source=self, lenient=lenient)
-            zone.add_record(record)
+                    'value': fqdn
+                }, source=self, lenient=lenient)
+                zone.add_record(record)
 
     def _populate_normal(self, zone, lenient):
         data = defaultdict(lambda: defaultdict(list))
@@ -195,7 +203,9 @@ class NetboxSource(BaseSource):
             family = ipam_record['family']
 
             for fqdn in description.split(','):
-                fqdn += '.' if fqdn[-1] != '.' else ''
+                if not is_valid_hostname(fqdn):
+                    continue
+                fqdn = '{}.'.format(fqdn)
 
                 if fqdn.endswith(zone.name):
                     name = zone.hostname_from_fqdn(fqdn)
@@ -215,3 +225,12 @@ class NetboxSource(BaseSource):
                 except SubzoneRecordException:
                     self.log.debug('_populate_normal: skipping subzone '
                                    'record=%s', record)
+
+    # https://stackoverflow.com/a/2532344
+    def is_valid_hostname(hostname):
+        if len(hostname) > 255:
+            return False
+        if hostname[-1] == ".":
+            hostname = hostname[:-1] # strip exactly one dot from the right, if present
+        allowed = re.compile("(?!-)[A-Z\d-]{1,63}(?<!-)$", re.IGNORECASE)
+        return all(allowed.match(x) for x in hostname.split("."))
