@@ -98,7 +98,7 @@ class NetboxSource(BaseSource):
         try:
             if zone != None:
                 self._ipam_records = \
-                    self._client.ipaddresses(zone=zone.name[:-1], family=family)
+                    self._client.ipaddresses(zone_name=zone.name[:-1], family=family)
             elif parent != None:
                 self._ipam_records = \
                     self._client.ipaddresses(parent=parent, family=family)
