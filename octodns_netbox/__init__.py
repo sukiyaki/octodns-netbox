@@ -8,7 +8,7 @@ based on a NetBox API.
 from collections import defaultdict
 from requests import Session
 from ipaddress import IPv4Interface, IPv6Interface
-from fqdn import FQDN
+import re
 import logging
 
 try:
