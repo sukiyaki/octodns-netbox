@@ -95,6 +95,7 @@ class NetboxSource(BaseSource):
         token: letmein
     '''
     SUPPORTS_GEO = False
+    SUPPORTS_DYNAMIC = False
     SUPPORTS = set(('A', 'AAAA', 'PTR'))
 
     def __init__(self, id, url, token, ttl=60):
