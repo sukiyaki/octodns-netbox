@@ -173,7 +173,7 @@ class NetboxSource(BaseSource):
                     fqdn = '{}.'.format(_fqdn)
                     break
                 else:
-                    self.log.info('[is_valid_hostname] failed - %s', _fqdn)
+                    self.log.info('[is_valid_hostname] failed >>%s<<', _fqdn)
 
             if fqdn:
                 record = Record.new(
@@ -211,7 +211,7 @@ class NetboxSource(BaseSource):
                     fqdn = '{}.'.format(_fqdn)
                     break
                 else:
-                    self.log.info('[is_valid_hostname] failed - %s', _fqdn)
+                    self.log.info('[is_valid_hostname] failed >>%s<<', _fqdn)
 
             if fqdn:
                 record = Record.new(
@@ -240,7 +240,7 @@ class NetboxSource(BaseSource):
 
                         data[name][_type].append(ip_address.compressed)
                 else:
-                    self.log.info('[is_valid_hostname] failed - %s', _fqdn)
+                    self.log.info('[is_valid_hostname] failed >>%s<<', _fqdn)
 
         for name, types in data.items():
             for _type, d in types.items():
