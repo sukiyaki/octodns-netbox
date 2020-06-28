@@ -26,10 +26,14 @@ __VERSION__ = 0.1
 def is_valid_hostname(hostname):
     if len(hostname) > 255:
         return False
-    if hostname[-1] == ".":
-        hostname = hostname[:-1]
-    allowed = re.compile("(?!-)[A-Z\d-]{1,63}(?<!-)$", re.IGNORECASE)
-    return all(allowed.match(x) for x in hostname.split("."))
+
+    try:
+        if hostname[-1] == ".":
+            hostname = hostname[:-1]
+        allowed = re.compile("(?!-)[A-Z\d-]{1,63}(?<!-)$", re.IGNORECASE)
+        return all(allowed.match(x) for x in hostname.split("."))
+    except:
+        return False
 
 
 class NetboxClientException(Exception):
@@ -168,6 +172,8 @@ class NetboxSource(BaseSource):
                 if is_valid_hostname(_fqdn):
                     fqdn = '{}.'.format(_fqdn)
                     break
+                else:
+                    self.log.info('[is_valid_hostname] failed - %s', _fqdn)
 
             if fqdn:
                 record = Record.new(
@@ -204,6 +210,8 @@ class NetboxSource(BaseSource):
                 if is_valid_hostname(_fqdn):
                     fqdn = '{}.'.format(_fqdn)
                     break
+                else:
+                    self.log.info('[is_valid_hostname] failed - %s', _fqdn)
 
             if fqdn:
                 record = Record.new(
@@ -231,6 +239,8 @@ class NetboxSource(BaseSource):
                         _type = 'A' if ip_address.version == 4 else 'AAAA'
 
                         data[name][_type].append(ip_address.compressed)
+                else:
+                    self.log.info('[is_valid_hostname] failed - %s', _fqdn)
 
         for name, types in data.items():
             for _type, d in types.items():
