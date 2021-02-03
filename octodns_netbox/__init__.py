@@ -157,7 +157,9 @@ class NetboxSource(BaseSource):
 
         for ipam_record in self.ipam_records(parent=parent, family=4):
             ip_address = ip_interface(ipam_record['address']).ip
-            description = ipam_record['description']
+            dns_name = ipam_record['dns_name']
+            if dns_name == '' or dns_name is None:
+                continue
 
             if zone_length > 3:
                 _name = '{}.{}'.format(
@@ -166,14 +168,11 @@ class NetboxSource(BaseSource):
             else:
                 name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
 
-            # take the first fqdn
             fqdn = None
-            for _fqdn in description.split(','):
-                if is_valid_hostname(_fqdn):
-                    fqdn = '{}.'.format(_fqdn)
-                    break
-                else:
-                    self.log.info('[is_valid_hostname] failed >>%s<<', _fqdn)
+            if is_valid_hostname(dns_name):
+                fqdn = '{}.'.format(dns_name)
+            else:
+                self.log.info('[is_valid_hostname] failed >>%s<<', fqdn)
 
             if fqdn:
                 record = Record.new(
@@ -200,18 +199,17 @@ class NetboxSource(BaseSource):
 
         for ipam_record in self.ipam_records(parent=parent, family=6):
             ip_address = ip_interface(ipam_record['address']).ip
-            description = ipam_record['description']
+            dns_name = ipam_record['dns_name']
+            if dns_name == '' or dns_name is None:
+                continue
 
             name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
 
-            # take the first fqdn
             fqdn = None
-            for _fqdn in description.split(','):
-                if is_valid_hostname(_fqdn):
-                    fqdn = '{}.'.format(_fqdn)
-                    break
-                else:
-                    self.log.info('[is_valid_hostname] failed >>%s<<', _fqdn)
+            if is_valid_hostname(dns_name):
+                fqdn = '{}.'.format(dns_name)
+            else:
+                self.log.info('[is_valid_hostname] failed >>%s<<', fqdn)
 
             if fqdn:
                 record = Record.new(
@@ -228,19 +226,17 @@ class NetboxSource(BaseSource):
 
         for ipam_record in self.ipam_records(zone):
             ip_address = ip_interface(ipam_record['address']).ip
-            description = ipam_record['description']
+            dns_name = ipam_record['dns_name']
 
-            for _fqdn in description.split(','):
-                if is_valid_hostname(_fqdn):
-                    fqdn = '{}.'.format(_fqdn)
+            if is_valid_hostname(dns_name):
+                fqdn = '{}.'.format(dns_name)
+                if fqdn.endswith(zone.name):
+                    name = zone.hostname_from_fqdn(fqdn)
+                    _type = 'A' if ip_address.version == 4 else 'AAAA'
 
-                    if fqdn.endswith(zone.name):
-                        name = zone.hostname_from_fqdn(fqdn)
-                        _type = 'A' if ip_address.version == 4 else 'AAAA'
-
-                        data[name][_type].append(ip_address.compressed)
-                else:
-                    self.log.info('[is_valid_hostname] failed >>%s<<', _fqdn)
+                    data[name][_type].append(ip_address.compressed)
+            else:
+                self.log.info('[is_valid_hostname] failed >>%s<<', dns_name)
 
         for name, types in data.items():
             for _type, d in types.items():
