@@ -16,6 +16,7 @@ try:
 except ImportError:
     from urllib import quote_plus
 
+from octodns.zone import SubzoneRecordException, Zone
 from octodns.record import Record
 from octodns.source.base import BaseSource
 
@@ -67,19 +68,35 @@ class NetboxClient(object):
         resp.raise_for_status()
         return resp
 
-    def ipaddresses(self, zone_name='', family='', parent=''):
+    def ipaddresses(self, zone_name='', family='', parent='', tag=''):
         ret = []
-
+        # OctoDNS zone_name does not have leading '.', need to add it
+        if zone_name:
+            zone_name = "."+zone_name
         limit = 50
         offset = 0
         parent = quote_plus(parent) if parent != '' else ''
 
         while True:
+            query=''
+            if(tag == ''):
+                query='/ipam/ip-addresses/?limit={}&offset={}&q={}&family={}&parent={}'.format(limit, offset, zone_name, family, parent)
+            else:
+                query='/ipam/ip-addresses/?limit={}&offset={}&q={}&family={}&parent={}&tag={}'.format(limit, offset, zone_name, family, parent, tag)
             data = self._request(
-                'GET',
-                '/ipam/ip-addresses/?limit={}&offset={}&q={}&family={}&parent={}'
-                .format(limit, offset, zone_name, family, parent)).json()
-            ret += data['results']
+                'GET', query).json()
+            if (parent):
+                ret += data['results']
+            # data may contain records for subdomains underneath zone_name. These entries are excluded.
+            else:
+                data_well = []
+                for element in data['results']:
+                    if (element['dns_name'].count('.') > zone_name.count('.')):
+                        continue
+                    else:
+                        data_well.append(element)
+                ret += data_well
+
             if data['next'] == None:
                 break
             offset += limit
@@ -102,12 +119,13 @@ class NetboxSource(BaseSource):
     SUPPORTS_DYNAMIC = False
     SUPPORTS = set(('A', 'AAAA', 'PTR'))
 
-    def __init__(self, id, url, token, ttl=60):
+    def __init__(self, id, url, token, tag='', ttl=60):
         self.log = logging.getLogger('NetboxSource[{}]'.format(id))
         self.log.debug('__init__: id=%s, url=%s, token=***', id, url)
         super(NetboxSource, self).__init__(id)
         self._client = NetboxClient(url, token)
         self.ttl = ttl
+        self.tag = tag
 
         self._ipam_records = []
 
@@ -115,10 +133,10 @@ class NetboxSource(BaseSource):
         try:
             if zone != None:
                 self._ipam_records = \
-                    self._client.ipaddresses(zone_name=zone.name[:-1])
+                    self._client.ipaddresses(zone_name=zone.name[:-1], tag=self.tag)
             elif parent != None:
                 self._ipam_records = \
-                    self._client.ipaddresses(parent=parent, family=family)
+                    self._client.ipaddresses(parent=parent, family=family, tag=self.tag)
             else:
                 return []
 
@@ -155,9 +173,18 @@ class NetboxSource(BaseSource):
                 parent += '.0'
             parent += '/{}'.format(8 * zone_length)
 
-        for ipam_record in self.ipam_records(parent=parent, family=4):
+        ipam_records = self.ipam_records(parent=parent, family=4)
+        # Iterate over copy of list of ipam records and remove all duplicate addresses while merging dns names
+        for ipam_record in list(ipam_records):
+            dup_elements = list(filter(lambda x: ipam_record['address'] in x['address'], ipam_records))
+            for elem in dup_elements:
+                if elem != ipam_record and ipam_record in ipam_records:
+                    ipam_record['dns_name'] += ","+elem['dns_name']
+                    ipam_records.remove(elem)
+
+        for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record['address']).ip
-            description = ipam_record['description']
+            description = ipam_record['dns_name']
 
             if zone_length > 3:
                 _name = '{}.{}'.format(
@@ -166,23 +193,33 @@ class NetboxSource(BaseSource):
             else:
                 name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
 
-            # take the first fqdn
-            fqdn = None
+            # Check if fqdns are valid and if so append them. For validity trailing dot is needed.
+            fqdn = []
             for _fqdn in description.split(','):
+                _fqdn += "."
                 if is_valid_hostname(_fqdn):
-                    fqdn = '{}.'.format(_fqdn)
-                    break
+                    fqdn.append(_fqdn)
                 else:
                     self.log.info('[is_valid_hostname] failed >>%s<<', _fqdn)
 
             if fqdn:
-                record = Record.new(
-                    zone,
-                    name, {'ttl': self.ttl,
-                           'type': 'PTR',
-                           'value': fqdn},
-                    source=self,
-                    lenient=lenient)
+                # Support for Multi-PTRecords
+                if(len(fqdn) == 1):
+                    record = Record.new(
+                        zone,
+                        name, {'ttl': self.ttl,
+                               'type': 'PTR',
+                               'value': fqdn[0]},
+                        source=self,
+                        lenient=lenient)
+                else:
+                    record = Record.new(
+                        zone,
+                        name, {'ttl': self.ttl,
+                               'type': 'PTR',
+                               'values': fqdn},
+                        source=self,
+                        lenient=lenient)
                 zone.add_record(record)
 
     def _populate_PTRv6(self, zone, lenient):
@@ -200,7 +237,7 @@ class NetboxSource(BaseSource):
 
         for ipam_record in self.ipam_records(parent=parent, family=6):
             ip_address = ip_interface(ipam_record['address']).ip
-            description = ipam_record['description']
+            description = ipam_record['dns_name']
 
             name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
 
@@ -228,7 +265,7 @@ class NetboxSource(BaseSource):
 
         for ipam_record in self.ipam_records(zone):
             ip_address = ip_interface(ipam_record['address']).ip
-            description = ipam_record['description']
+            description = ipam_record['dns_name']
 
             for _fqdn in description.split(','):
                 if is_valid_hostname(_fqdn):
