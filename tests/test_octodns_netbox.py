@@ -90,6 +90,14 @@ class TestNetboxSourceFailSenarios:
             NetboxSource("test", "http://netbox.example.com/")
         assert "required positional argument" in str(excinfo.value)
 
+    def test_init_warning_due_to_invalid_url(self, caplog):
+        NetboxSource(
+            "test",
+            "http://netbox.example.com/api/",
+            "testtoken",
+        )
+        assert "Please remove `/api`" in caplog.text
+
     def test_init_failed_due_to_invalid_name_field_type(self):
         with pytest.raises(TypeError) as excinfo:
             NetboxSource(

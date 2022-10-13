@@ -6,6 +6,7 @@ based on a NetBox API.
 """
 
 import logging
+import re
 from collections import defaultdict
 from ipaddress import ip_interface
 
@@ -40,6 +41,11 @@ class NetboxSource(BaseSource):
         )
         super().__init__(id)
 
+        if re.search("/api/?$", url):
+            self.log.warning(
+                "Please remove `/api` at the end of the URL (still working for backwards compatibility)"
+            )
+            url = re.sub("/api/?$", "", url)
         self._nb_client = pynetbox.api(url=url, token=token)
 
         session = requests.Session()
