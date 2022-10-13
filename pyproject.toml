@@ -42,6 +42,8 @@ requests-mock = "^1.9.3"
 enable = true
 vcs = "git"
 style = "pep440"
+metadata = false
+bump = true
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
