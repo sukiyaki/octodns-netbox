@@ -1,0 +1,63 @@
+{
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 1774,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1774/",
+            "display": "2001:0db8::2/100",
+            "family": {
+                "value": 6,
+                "label": "IPv6"
+            },
+            "address": "2001:0db8::2/100",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-2001-0db8-2.example.com",
+            "description": "description-2001-0db8-2.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-21T07:41:47.545639Z",
+            "last_updated": "2022-09-21T07:41:47.545662Z"
+        },
+        {
+            "id": 1775,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1775/",
+            "display": "2001:0db8::3/100",
+            "family": {
+                "value": 6,
+                "label": "IPv6"
+            },
+            "address": "2001:0db8::3/100",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-2001-0db8-3.example.com",
+            "description": "description-2001-0db8-3.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-21T07:41:47.574008Z",
+            "last_updated": "2022-09-21T07:41:47.574033Z"
+        }
+    ]
+}

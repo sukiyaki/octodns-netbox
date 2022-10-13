@@ -1,0 +1,18 @@
+{
+    "id": 1,
+    "url": "https://ipam.example.com/api/ipam/vrfs/1/",
+    "display": "mgmt",
+    "name": "mgmt",
+    "rd": null,
+    "tenant": null,
+    "enforce_unique": true,
+    "description": "management segment",
+    "import_targets": [],
+    "export_targets": [],
+    "tags": [],
+    "custom_fields": {},
+    "created": "2022-09-10T00:00:00Z",
+    "last_updated": "2022-09-10T13:12:44.787038Z",
+    "ipaddress_count": 144,
+    "prefix_count": 26
+}

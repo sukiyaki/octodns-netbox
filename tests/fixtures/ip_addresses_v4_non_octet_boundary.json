@@ -1,0 +1,88 @@
+{
+    "count": 3,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 8,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/8/",
+            "display": "192.0.2.1/29",
+            "family": {
+                "value": 4,
+                "label": "IPv4"
+            },
+            "address": "192.0.2.1/29",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "reserved",
+                "label": "Reserved"
+            },
+            "role": null,
+            "assigned_object_type": "dcim.interface",
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-192-0-2-1.example.com",
+            "description": "description-192-0-2-1.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2020-02-21T00:00:00Z",
+            "last_updated": "2020-02-28T05:32:18.615510Z"
+        },
+        {
+            "id": 9,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/9/",
+            "display": "192.0.2.2/29",
+            "family": null,
+            "address": "192.0.2.2/29",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "reserved",
+                "label": "Reserved"
+            },
+            "role": null,
+            "assigned_object_type": "dcim.interface",
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-192-0-2-2.example.com",
+            "description": "description-192-0-2-2.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2020-02-21T00:00:00Z",
+            "last_updated": "2020-02-28T05:32:19.699043Z"
+        },
+        {
+            "id": 10,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/10/",
+            "display": "192.0.2.3/29",
+            "family": {
+                "value": 4,
+                "label": "IPv4"
+            },
+            "address": "192.0.2.3/29",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "reserved",
+                "label": "Reserved"
+            },
+            "role": null,
+            "assigned_object_type": "dcim.interface",
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-192-0-2-3.example.com",
+            "description": "description-192-0-2-3.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2020-02-21T00:00:00Z",
+            "last_updated": "2020-02-28T05:32:20.708105Z"
+        }
+    ]
+}
