@@ -51,12 +51,18 @@ jobs:
     - name: Test with tox
       run: tox
 
-    - uses: codecov/codecov-action@v3
+    - name: 🚀 Publish code coverage to Codecov
+      uses: codecov/codecov-action@v3
       if: ${{ success() }}
       with:
         fail_ci_if_error: true
         token: ${{ secrets.CODECOV_TOKEN }}
         files: coverage.xml
+
+    - name: 🚀 Publish code coverage to Code Climate
+      uses: paambaati/codeclimate-action@v3.0.0
+      env:
+        CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
 
   publish_dev_build:
     # if test failed, we should not publish
