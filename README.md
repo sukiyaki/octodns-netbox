@@ -1,16 +1,18 @@
-## octoDNS meets NetBox
-
-A [NetBox](https://github.com/digitalocean/netbox) source for [octoDNS](https://github.com/github/octodns/).
-
-Based on IP address information managed by NetBox,
-automatically creating A/AAAA records and their corresponding PTR records.
+## A [NetBox](https://github.com/digitalocean/netbox) source for [octoDNS](https://github.com/github/octodns/)
 
 NetBox is not intended to be used as a full DNS management application. However, with this project, you will have complete control over your DNS records with Netbox!
 
-### Example config
+⚠️ This is a **source** for octoDNS! We can only serve to populate records into a zone, cannot be synced **to** Netbox.
 
-The following config will combine the records in `./config/example.com.yaml`
-and the dynamically looked up addresses at NetBox.
+Based on IP address information managed by NetBox, this automatically creating A/AAAA records and their corresponding PTR records. In order to generate these records, Netbox must have the correct information on what FQDNs correspond to IP addresses. We use the `description` field as a comma-separated list of hostnames (FQDNs).
+
+For instance, if you have `192.0.2.1/26` in your Netbox and `en0.host1.example.com,host1.example.com` is entered in its description field, you can use this source as shown in the sample configuration below, you will get three records. That is `en0.host1.example.com. A 192.0.2.1`, `host1.example.com. A 192.0.2.1` and `1.0/26.2.0.192.in-addr.arpa. PTR en0.host1.example.com.`! 🎉
+
+Starting with [Netbox v2.6.0](https://github.com/netbox-community/netbox/issues/166), IPAddress now has a `dns_name` field. If you want to utilize this field, just set `field_name: dns_name` to your configuration. However, [I don't know why](https://github.com/netbox-community/netbox/discussions/9232), this field can only store **single** FQDN. So you would probably be more comfortable using the `description` field as a comma-separated list, since it is not possible to do complex DNS record management.
+
+### Example Configuration
+
+The following config will combine the records in `./config/example.com.yaml` and the dynamically looked up addresses at NetBox.
 
 You must configure `url` and `token` to work with the [NetBox API](https://netbox.readthedocs.io/en/latest/api/overview/).
 
@@ -43,7 +45,7 @@ providers:
     # The `description` does not have any limitations so by default
     # we use the `description` field to store multiple FQDNs, separated by commas.
     # Tested: `description`, `dns_name`
-    name_field: description
+    field_name: description
     # Tag Name (Optional)
     # By default, all records are retrieved from Netbox, but it can be restricted
     # to only IP addresses assigned a specific tag.
@@ -85,3 +87,9 @@ zones:
     targets:
       - route53
 ```
+
+## Contributing
+See [the contributing guide](CONTRIBUTING.md) for detailed instructions on how to get started with our project.
+
+## License
+[MIT](https://choosealicense.com/licenses/mit/)
