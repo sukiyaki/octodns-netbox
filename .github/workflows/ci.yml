@@ -4,14 +4,8 @@ name: dev workflow
 
 # Controls when the action will run.
 on:
-  # Triggers the workflow on every push or pull request events
+  # Triggers the workflow on every pull request events
   pull_request:
-
-  push:
-    branches:
-    - '*'
-    tags-ignore:
-    - '*'
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -31,10 +25,6 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-    - uses: szenius/set-timezone@v1.0
-      with:
-        timezoneLinux: Asia/Tokyo
-
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
@@ -59,10 +49,42 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: coverage.xml
 
+    - name: 📥 Upload coverage.xml to Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        path: ${{ github.workspace }}/coverage.xml
+        name: ${{ github.run_number }}-coverage-${{ matrix.os }}-${{ matrix.python-versions }}
+
+  publish_coverage_codeclimate:
+    name: 🚀 Publish code coverage to Code Climate
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: 👀 Download all artifacts within the workflow run
+      id: download
+      uses: actions/download-artifact@v3
+
+    - name: 🔍 Display structure of downloaded files
+      run: ls -Rla ${{steps.download.outputs.download-path}}
+
     - name: 🚀 Publish code coverage to Code Climate
       uses: paambaati/codeclimate-action@v3.0.0
       env:
         CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+      with:
+        debug: true
+        coverageLocations: |
+          ${{steps.download.outputs.download-path}}/${{ github.run_number }}-coverage-*/coverage.xml:coverage.py
+
+    - name: 🗑 Delete artifacts within the workflow run
+      uses: geekyeggo/delete-artifact@v2
+      if: always()
+      with:
+        name: ${{ github.run_number }}-coverage-*
 
   publish_dev_build:
     # if test failed, we should not publish
@@ -71,12 +93,6 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-    - uses: szenius/set-timezone@v1.0
-      with:
-        timezoneLinux: Asia/Tokyo
-        timezoneMacos: Asia/Tokyo
-        timezoneWindows: Tokyo Standard Time
-
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
