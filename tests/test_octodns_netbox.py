@@ -1,7 +1,8 @@
 import pytest
 import requests_mock
-from octodns.record import Record, Rr, ValidationError
-from octodns.zone import SubzoneRecordException, Zone
+from octodns.record import Record
+from octodns.zone import Zone
+from pydantic.error_wrappers import ValidationError
 
 from octodns_netbox import NetboxSource
 
@@ -81,125 +82,190 @@ def mock_requests():
 
 class TestNetboxSourceFailSenarios:
     def test_init_failed_due_to_missing_url(self):
-        with pytest.raises(TypeError) as excinfo:
+        with pytest.raises(ValidationError) as excinfo:
             NetboxSource("test")
-        assert "required positional argument" in str(excinfo.value)
+        assert excinfo.value.errors() == [
+            {"loc": ("url",), "msg": "field required", "type": "value_error.missing"},
+            {"loc": ("token",), "msg": "field required", "type": "value_error.missing"},
+        ]
 
     def test_init_failed_due_to_missing_token(self):
-        with pytest.raises(TypeError) as excinfo:
-            NetboxSource("test", "http://netbox.example.com/")
-        assert "required positional argument" in str(excinfo.value)
+        with pytest.raises(ValidationError) as excinfo:
+            NetboxSource("test", url="http://netbox.example.com/")
+        assert excinfo.value.errors() == [
+            {"loc": ("token",), "msg": "field required", "type": "value_error.missing"}
+        ]
 
-    def test_init_warning_due_to_invalid_url(self, caplog):
-        NetboxSource(
+    def test_init_maintain_backword_compatibility_for_url(self):
+        source = NetboxSource(
             "test",
-            "http://netbox.example.com/api/",
-            "testtoken",
+            url="http://netbox.example.com/api/",
+            token="testtoken",
         )
-        assert "Please remove `/api`" in caplog.text
+        assert source.url == "http://netbox.example.com"
 
-    def test_init_failed_due_to_invalid_name_field_type(self):
-        with pytest.raises(TypeError) as excinfo:
+    def test_init_failed_due_to_invalid_field_name_type(self):
+        with pytest.raises(ValidationError) as excinfo:
             NetboxSource(
                 "test",
-                "http://netbox.example.com/",
-                "testtoken",
-                name_field=True,
+                url="http://netbox.example.com/",
+                token="testtoken",
+                field_name=["dns_name", "description"],
             )
-        assert "Invalid type for name_field: must be a string" in str(excinfo.value)
+        assert excinfo.value.errors() == [
+            {
+                "loc": ("field_name",),
+                "msg": "str type expected",
+                "type": "type_error.str",
+            }
+        ]
 
     def test_init_failed_due_to_invalid_ttl_type(self):
-        with pytest.raises(TypeError) as excinfo:
-            NetboxSource("test", "http://netbox.example.com/", "testtoken", ttl=[10])
-        assert "Invalid type for ttl: must be a string or int" in str(excinfo.value)
+        with pytest.raises(ValidationError) as excinfo:
+            NetboxSource(
+                "test", url="http://netbox.example.com/", token="testtoken", ttl=[10]
+            )
+        assert excinfo.value.errors() == [
+            {
+                "loc": ("ttl",),
+                "msg": "value is not a valid integer",
+                "type": "type_error.integer",
+            }
+        ]
 
     def test_init_failed_due_to_invalid_ttl_value(self):
-        with pytest.raises(ValueError) as excinfo:
-            NetboxSource("test", "http://netbox.example.com/", "testtoken", ttl="ten")
-        assert "Invalid value: ttl" in str(excinfo.value)
+        with pytest.raises(ValidationError) as excinfo:
+            NetboxSource(
+                "test", url="http://netbox.example.com/", token="testtoken", ttl="ten"
+            )
+        assert excinfo.value.errors() == [
+            {
+                "loc": ("ttl",),
+                "msg": "value is not a valid integer",
+                "type": "type_error.integer",
+            }
+        ]
 
     def test_init_failed_due_to_invalid_populate_tags_type(self):
-        with pytest.raises(TypeError) as excinfo:
+        with pytest.raises(ValidationError) as excinfo:
             NetboxSource(
-                "test", "http://netbox.example.com/", "testtoken", populate_tags="tag"
+                "test",
+                url="http://netbox.example.com/",
+                token="testtoken",
+                populate_tags="tag",
             )
-        assert "Invalid type for populate_tags: must be a list" in str(excinfo.value)
+        assert excinfo.value.errors() == [
+            {
+                "loc": ("populate_tags",),
+                "msg": "value is not a valid list",
+                "type": "type_error.list",
+            }
+        ]
 
     def test_init_failed_due_to_invalid_populate_vrf_id_type(self):
-        with pytest.raises(TypeError) as excinfo:
+        with pytest.raises(ValidationError) as excinfo:
             NetboxSource(
-                "test", "http://netbox.example.com/", "testtoken", populate_vrf_id=[10]
+                "test",
+                url="http://netbox.example.com/",
+                token="testtoken",
+                populate_vrf_id=[10],
             )
-        assert "Invalid type for populate_vrf_id: must be a string or int" in str(
-            excinfo.value
-        )
+        assert excinfo.value.errors() == [
+            {
+                "loc": ("populate_vrf_id",),
+                "msg": "value is not a valid integer",
+                "type": "type_error.integer",
+            }
+        ]
 
     def test_init_failed_due_to_invalid_populate_vrf_id_value(self):
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(ValidationError) as excinfo:
             NetboxSource(
-                "test", "http://netbox.example.com/", "testtoken", populate_vrf_id="ten"
+                "test",
+                url="http://netbox.example.com/",
+                token="testtoken",
+                populate_vrf_id="ten",
             )
-        assert "Invalid value: populate_vrf_id" in str(excinfo.value)
+        assert excinfo.value.errors() == [
+            {
+                "loc": ("populate_vrf_id",),
+                "msg": "value is not a valid integer",
+                "type": "type_error.integer",
+            }
+        ]
 
     def test_init_failed_because_both_populate_vrf_id_populate_vrf_name_are_provided(
         self,
     ):
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(ValidationError) as excinfo:
             NetboxSource(
                 "test",
-                "http://netbox.example.com/",
-                "testtoken",
+                url="http://netbox.example.com/",
+                token="testtoken",
                 populate_vrf_id=1,
                 populate_vrf_name="TEST",
             )
         assert "Do not set both populate_vrf_id and populate_vrf" in str(excinfo.value)
 
     def test_init_failed_due_to_invalid_populate_vrf_name_type(self):
-        with pytest.raises(TypeError) as excinfo:
+        with pytest.raises(ValidationError) as excinfo:
             NetboxSource(
                 "test",
-                "http://netbox.example.com/",
-                "testtoken",
+                url="http://netbox.example.com/",
+                token="testtoken",
                 populate_vrf_name=["TEST"],
             )
-        assert "Invalid type for populate_vrf_name: must be a string" in str(
-            excinfo.value
-        )
+        assert excinfo.value.errors() == [
+            {
+                "loc": ("populate_vrf_name",),
+                "msg": "str type expected",
+                "type": "type_error.str",
+            }
+        ]
 
-    def test_init_failed_due_to_invalid_populate_vrf_id(self):
+    def test_init_failed_because_populate_vrf_id_is_not_found_at_netbox(self):
         with pytest.raises(ValueError) as excinfo:
             NetboxSource(
-                "test", "http://netbox.example.com/", "testtoken", populate_vrf_id=10
+                "test",
+                url="http://netbox.example.com/",
+                token="testtoken",
+                populate_vrf_id=10,
             )
         assert "Failed to retrive vrf information by id" in str(excinfo.value)
 
-    def test_init_failed_due_to_invalid_populate_vrf_name(self):
+    def test_init_failed_because_invalid_populate_vrf_name_is_not_found_at_netbox(self):
         with pytest.raises(ValueError) as excinfo:
             NetboxSource(
                 "test",
-                "http://netbox.example.com/",
-                "testtoken",
+                url="http://netbox.example.com/",
+                token="testtoken",
                 populate_vrf_name="TEST",
             )
         assert "Failed to retrive vrf information by name" in str(excinfo.value)
 
     def test_init_failed_due_to_invalid_populate_subdomains_type(self):
-        with pytest.raises(TypeError) as excinfo:
+        with pytest.raises(ValidationError) as excinfo:
             NetboxSource(
                 "test",
-                "http://netbox.example.com/",
-                "testtoken",
-                populate_subdomains="True",
+                url="http://netbox.example.com/",
+                token="testtoken",
+                populate_subdomains="ok",
             )
-        assert "Invalid type for populate_subdomains: must be a bool" in str(
-            excinfo.value
-        )
+        assert excinfo.value.errors() == [
+            {
+                "loc": ("populate_subdomains",),
+                "msg": "value could not be parsed to a boolean",
+                "type": "type_error.bool",
+            }
+        ]
 
 
 class TestNetboxSourcePopulateIPv4PTRNonOctecBoundary:
     def test_populate_PTR_v4_non_octet_boundary(self):
         zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
-        source = NetboxSource("test", "http://netbox.example.com/", "testtoken")
+        source = NetboxSource(
+            "test", url="http://netbox.example.com/", token="testtoken"
+        )
         source.populate(zone)
 
         assert len(zone.records) == 3
@@ -237,10 +303,13 @@ class TestNetboxSourcePopulateIPv4PTRNonOctecBoundary:
         changes = expected.changes(zone, SimpleProvider())
         assert changes == []
 
-    def test_populate_PTR_v4_non_octet_boundary_name_field_is_dns_name(self):
+    def test_populate_PTR_v4_non_octet_boundary_field_name_is_dns_name(self):
         zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
         source = NetboxSource(
-            "test", "http://netbox.example.com/", "testtoken", name_field="dns_name"
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            field_name="dns_name",
         )
         source.populate(zone)
 
@@ -282,7 +351,7 @@ class TestNetboxSourcePopulateIPv4PTRNonOctecBoundary:
     def test_populate_PTR_v4_non_octet_boundary_custom_ttl(self):
         zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
         source = NetboxSource(
-            "test", "http://netbox.example.com/", "testtoken", ttl=120
+            "test", url="http://netbox.example.com/", token="testtoken", ttl=120
         )
         source.populate(zone)
 
@@ -324,7 +393,10 @@ class TestNetboxSourcePopulateIPv4PTRNonOctecBoundary:
     def test_populate_PTR_v4_non_octet_boundary_select_vrf_by_id(self):
         zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
         source = NetboxSource(
-            "test", "http://netbox.example.com/", "testtoken", populate_vrf_id=1
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            populate_vrf_id=1,
         )
         source.populate(zone)
 
@@ -366,7 +438,10 @@ class TestNetboxSourcePopulateIPv4PTRNonOctecBoundary:
     def test_populate_PTR_v4_non_octet_boundary_select_vrf_by_name(self):
         zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
         source = NetboxSource(
-            "test", "http://netbox.example.com/", "testtoken", populate_vrf_name="mgmt"
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            populate_vrf_name="mgmt",
         )
         source.populate(zone)
 
@@ -409,7 +484,9 @@ class TestNetboxSourcePopulateIPv4PTRNonOctecBoundary:
 class TestNetboxSourcePopulateIPv4PTROctecBoundary:
     def test_populate_PTR_v4_octet_boundary(self):
         zone = Zone("2.0.192.in-addr.arpa.", [])
-        source = NetboxSource("test", "http://netbox.example.com/", "testtoken")
+        source = NetboxSource(
+            "test", url="http://netbox.example.com/", token="testtoken"
+        )
         source.populate(zone)
 
         assert len(zone.records) == 3
@@ -447,10 +524,13 @@ class TestNetboxSourcePopulateIPv4PTROctecBoundary:
         changes = expected.changes(zone, SimpleProvider())
         assert changes == []
 
-    def test_populate_PTR_v4_octet_boundary_name_field_is_dns_name(self):
+    def test_populate_PTR_v4_octet_boundary_field_name_is_dns_name(self):
         zone = Zone("2.0.192.in-addr.arpa.", [])
         source = NetboxSource(
-            "test", "http://netbox.example.com/", "testtoken", name_field="dns_name"
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            field_name="dns_name",
         )
         source.populate(zone)
 
@@ -494,7 +574,9 @@ class TestNetboxSourcePopulateIPv4PTROctecBoundary:
         # This can happen when VRF is not specifically specified in octodns_netbox,
         # even though they are actually managed on the Netbox using VRF.
         zone = Zone("3.0.192.in-addr.arpa.", [])
-        source = NetboxSource("test", "http://netbox.example.com/", "testtoken")
+        source = NetboxSource(
+            "test", url="http://netbox.example.com/", token="testtoken"
+        )
         source.populate(zone)
 
         assert len(zone.records) == 1
@@ -520,7 +602,9 @@ class TestNetboxSourcePopulateIPv4PTROctecBoundary:
 class TestNetboxSourcePopulateIPv6PTRNonNibbleBoundary:
     def test_populate_PTR_v6_non_nibble_boundary(self):
         zone = Zone("0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", [])
-        source = NetboxSource("test", "http://netbox.example.com/", "testtoken")
+        source = NetboxSource(
+            "test", url="http://netbox.example.com/", token="testtoken"
+        )
         source.populate(zone)
 
         assert len(zone.records) == 2
@@ -552,10 +636,13 @@ class TestNetboxSourcePopulateIPv6PTRNonNibbleBoundary:
         changes = expected.changes(zone, SimpleProvider())
         assert changes == []
 
-    def test_populate_PTR_v6_non_nibble_boundary_name_field_is_dns_name(self):
+    def test_populate_PTR_v6_non_nibble_boundary_field_name_is_dns_name(self):
         zone = Zone("0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", [])
         source = NetboxSource(
-            "test", "http://netbox.example.com/", "testtoken", name_field="dns_name"
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            field_name="dns_name",
         )
         source.populate(zone)
 
@@ -592,7 +679,9 @@ class TestNetboxSourcePopulateIPv6PTRNonNibbleBoundary:
 class TestNetboxSourcePopulateIPv6PTRNibbleBoundary:
     def test_populate_PTR_v6_nibble_boundary(self):
         zone = Zone("0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", [])
-        source = NetboxSource("test", "http://netbox.example.com/", "testtoken")
+        source = NetboxSource(
+            "test", url="http://netbox.example.com/", token="testtoken"
+        )
         source.populate(zone)
 
         assert len(zone.records) == 2
@@ -625,7 +714,10 @@ class TestNetboxSourcePopulateIPv6PTRNibbleBoundary:
     def test_populate_PTR_v6_name_nibble_boundary_field_is_dns_name(self):
         zone = Zone("0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", [])
         source = NetboxSource(
-            "test", "http://netbox.example.com/", "testtoken", name_field="dns_name"
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            field_name="dns_name",
         )
         source.populate(zone)
 
@@ -660,7 +752,9 @@ class TestNetboxSourcePopulateIPv6PTRNibbleBoundary:
 class TestNetboxSourcePopulateNormal:
     def test_populate_A_and_AAAA(self):
         zone = Zone("example.com.", [])
-        source = NetboxSource("test", "http://netbox.example.com/", "testtoken")
+        source = NetboxSource(
+            "test", url="http://netbox.example.com/", token="testtoken"
+        )
         source.populate(zone)
 
         assert len(zone.records) == 8
@@ -741,7 +835,10 @@ class TestNetboxSourcePopulateNormal:
     def test_populate_A_and_AAAA_field_is_dns_name(self):
         zone = Zone("example.com.", [])
         source = NetboxSource(
-            "test", "http://netbox.example.com/", "testtoken", name_field="dns_name"
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            field_name="dns_name",
         )
         source.populate(zone)
 
@@ -800,9 +897,9 @@ class TestNetboxSourcePopulateNormal:
         zone = Zone("example.com.", [])
         source = NetboxSource(
             "test",
-            "http://netbox.example.com/",
-            "testtoken",
-            name_field="dns_name",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            field_name="dns_name",
             populate_subdomains=False,
         )
         source.populate(zone)
@@ -847,7 +944,10 @@ class TestNetboxSourcePopulateNormal:
     ):
         zone = Zone("example.com.", set(["subdomain1"]))
         source = NetboxSource(
-            "test", "http://netbox.example.com/", "testtoken", name_field="dns_name"
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            field_name="dns_name",
         )
         source.populate(zone)
 

@@ -4,14 +4,8 @@ name: dev workflow
 
 # Controls when the action will run.
 on:
-  # Triggers the workflow on every push or pull request events
+  # Triggers the workflow on every pull request events
   pull_request:
-
-  push:
-    branches:
-      - '*'
-    tags-ignore:
-      - '*'
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -31,33 +25,66 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: szenius/set-timezone@v1.0
-        with:
-          timezoneLinux: "Asia/Tokyo"
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+    - uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-versions }}
 
-      - uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-versions }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install tox tox-gh-actions
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install tox tox-gh-actions
+    - name: Test with tox
+      run: tox
 
-      - name: Test with tox
-        run:
-          tox
+    - name: 🚀 Publish code coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: ${{ success() }}
+      with:
+        fail_ci_if_error: true
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: coverage.xml
 
-      - uses: codecov/codecov-action@v3
-        if: ${{ success() }}
-        with:
-          fail_ci_if_error: true
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.xml
+    - name: 📥 Upload coverage.xml to Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        path: ${{ github.workspace }}/coverage.xml
+        name: ${{ github.run_number }}-coverage-${{ matrix.os }}-${{ matrix.python-versions }}
+
+  publish_coverage_codeclimate:
+    name: 🚀 Publish code coverage to Code Climate
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: 👀 Download all artifacts within the workflow run
+      id: download
+      uses: actions/download-artifact@v3
+
+    - name: 🔍 Display structure of downloaded files
+      run: ls -Rla ${{steps.download.outputs.download-path}}
+
+    - name: 🚀 Publish code coverage to Code Climate
+      uses: paambaati/codeclimate-action@v3.0.0
+      env:
+        CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+      with:
+        debug: true
+        coverageLocations: |
+          ${{steps.download.outputs.download-path}}/${{ github.run_number }}-coverage-*/coverage.xml:coverage.py
+
+    - name: 🗑 Delete artifacts within the workflow run
+      uses: geekyeggo/delete-artifact@v2
+      if: always()
+      with:
+        name: ${{ github.run_number }}-coverage-*
 
   publish_dev_build:
     # if test failed, we should not publish
@@ -66,34 +93,28 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: szenius/set-timezone@v1.0
-        with:
-          timezoneLinux: "Asia/Tokyo"
-          timezoneMacos: "Asia/Tokyo"
-          timezoneWindows: "Tokyo Standard Time"
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry self add "poetry-dynamic-versioning[plugin]"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install poetry
-          poetry self add "poetry-dynamic-versioning[plugin]"
+    - name: Build wheels and source tarball
+      run: |
+        poetry build
 
-      - name: Build wheels and source tarball
-        run: |
-          poetry build
-
-      - name: Publish distribution 📦 to Test PyPI
-        uses: pypa/gh-action-pypi-publish@master
-        with:
-          user: __token__
-          password: ${{ secrets.TEST_PYPI_API_TOKEN}}
-          repository_url: https://test.pypi.org/legacy/
-          skip_existing: true
+    - name: Publish distribution 📦 to Test PyPI
+      uses: pypa/gh-action-pypi-publish@master
+      with:
+        user: __token__
+        password: ${{ secrets.TEST_PYPI_API_TOKEN}}
+        repository_url: https://test.pypi.org/legacy/
+        skip_existing: true

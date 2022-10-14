@@ -5,104 +5,100 @@ Automatically creating A/AAAA records and their corresponding PTR records
 based on a NetBox API.
 """
 
+
 import logging
 import re
-from collections import defaultdict
+import sys
+import typing
 from ipaddress import ip_interface
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 import pynetbox
 import requests
 from octodns.record import Record
 from octodns.source.base import BaseSource
-from octodns.zone import DuplicateRecordException, SubzoneRecordException
+from octodns.zone import DuplicateRecordException, SubzoneRecordException, Zone
+from pydantic import AnyHttpUrl, BaseModel, Extra, validator
 
 
-class NetboxSource(BaseSource):
-    SUPPORTS_GEO = False
-    SUPPORTS_DYNAMIC = False
-    SUPPORTS = set(("A", "AAAA", "PTR"))
+class NetboxSourceConfig(BaseModel):
+    SUPPORTS_GEO: bool = False
+    SUPPORTS_DYNAMIC: bool = False
+    SUPPORTS: typing.Set[str] = set(("A", "AAAA", "PTR"))
 
-    def __init__(
-        self,
-        id,
-        url,
-        token,
-        name_field="description",
-        populate_tags=[],
-        populate_vrf_id=None,
-        populate_vrf_name=None,
-        populate_subdomains=True,
-        ttl=60,
-        ssl_verify=True,
-    ):
-        self.log = logging.getLogger(f"{self.__class__.__name__}[{id}]")
+    id: str
+    url: AnyHttpUrl
+    token: str
+    field_name: str = "description"
+    populate_tags: typing.List[str] = []
+    populate_vrf_id: typing.Optional[int] = None
+    populate_vrf_name: typing.Optional[str] = None
+    populate_subdomains: bool = True
+    ttl: int = 60
+    ssl_verify: bool = True
+    log: logging.Logger
+
+    @validator("url")
+    def check_url(cls, v):
+        if re.search("/api/?$", v):
+            v = re.sub("/api/?$", "", v)
+        return v
+
+    @validator("populate_vrf_name")
+    def check_vrf_name(cls, v, values):
+        if "populate_vrf_id" in values and (
+            v is not None and values["populate_vrf_id"] is not None
+        ):
+            raise ValueError("Do not set both populate_vrf_id and populate_vrf")
+        return v
+
+    class Config:
+        extra = Extra.allow
+        underscore_attrs_are_private = True
+        arbitrary_types_allowed = True
+
+
+class NetboxSource(BaseSource, NetboxSourceConfig):
+    def __init__(self, id: str, **kwargs):
+        kwargs["id"] = id
+        kwargs["log"] = logging.getLogger(f"{self.__class__.__name__}[{id}]")
+
+        NetboxSourceConfig.__init__(self, **kwargs)
+        BaseSource.__init__(self, id)
+
         self.log.debug(
-            f"__init__: id={id}, url={url}, ttl={ttl}, ssl_verify={ssl_verify}"
+            f"__init__: id={id}, url={self.url}, ttl={self.ttl}, ssl_verify={self.ssl_verify}"
         )
-        super().__init__(id)
 
-        if re.search("/api/?$", url):
-            self.log.warning(
-                "Please remove `/api` at the end of the URL (still working for backwards compatibility)"
-            )
-            url = re.sub("/api/?$", "", url)
-        self._nb_client = pynetbox.api(url=url, token=token)
+        self._nb_client = pynetbox.api(url=self.url, token=self.token)
 
         session = requests.Session()
-        session.verify = ssl_verify
+        session.verify = self.ssl_verify
         self._nb_client.http_session = session
 
-        if not isinstance(name_field, str):
-            raise TypeError("Invalid type for name_field: must be a string")
-        self._name_field = name_field
-
-        if not isinstance(ttl, (str, int)):
-            raise TypeError("Invalid type for ttl: must be a string or int")
-        try:
-            self._ttl = int(ttl)
-        except ValueError:
-            raise ValueError("Invalid value: ttl")
-
-        if not isinstance(populate_tags, list):
-            raise TypeError("Invalid type for populate_tags: must be a list")
-        self._populate_tags = populate_tags
-
-        if not isinstance(populate_vrf_id, (str, int, type(None))):
-            raise TypeError("Invalid type for populate_vrf_id: must be a string or int")
-        try:
-            if populate_vrf_id is None:
-                self._populate_vrf_id = None
-            else:
-                self._populate_vrf_id = int(populate_vrf_id)
-        except ValueError:
-            raise ValueError("Invalid value: populate_vrf_id")
         if (
-            self._populate_vrf_id is not None
-            and self._nb_client.ipam.vrfs.get(self._populate_vrf_id) is None
+            self.populate_vrf_id is not None
+            and self._nb_client.ipam.vrfs.get(self.populate_vrf_id) is None
         ):
             raise ValueError(
                 "Failed to retrive vrf information by id, check populate_vrf_id"
             )
 
-        if populate_vrf_name is not None and self._populate_vrf_id is not None:
-            raise ValueError("Do not set both populate_vrf_id and populate_vrf")
-        if not isinstance(populate_vrf_name, (str, type(None))):
-            raise TypeError("Invalid type for populate_vrf_name: must be a string")
-        if populate_vrf_name is not None:
+        if self.populate_vrf_name is not None:
             try:
-                self._populate_vrf_id = self._nb_client.ipam.vrfs.get(
-                    name=populate_vrf_name
+                self.populate_vrf_id = self._nb_client.ipam.vrfs.get(
+                    name=self.populate_vrf_name
                 ).id
             except (ValueError, AttributeError):
                 raise ValueError(
                     "Failed to retrive vrf information by name, use populate_vrf_id instead"
                 )
 
-        if type(populate_subdomains) != bool:
-            raise TypeError("Invalid type for populate_subdomains: must be a bool")
-        self._populate_subdomains = populate_subdomains
-
-    def populate(self, zone, target=False, lenient=False):
+    def populate(self, zone: Zone, target=False, lenient=False):
         self.log.debug(
             f"populate: name={zone.name}, target={target}, lenient={lenient}"
         )
@@ -116,6 +112,34 @@ class NetboxSource(BaseSource):
             self._populate_normal(zone, lenient)
 
         self.log.info("populate:   found %s records", len(zone.records) - before)
+
+    def _add_record(
+        self,
+        zone: Zone,
+        name: str,
+        _type: Literal["A", "AAAA", "PTR"],
+        value: str,
+        lenient: bool,
+    ):
+        if _type == "PTR" and value[-1] != ".":
+            value = f"{value}."
+
+        self.log.info(
+            f"{_type} record added: zone={zone.name}, name={name}, value={value}"
+        )
+        record = Record.new(
+            zone,
+            name,
+            {"ttl": self.ttl, "type": _type, "value": f"{value}"},
+            source=self,
+            lenient=lenient,
+        )
+        try:
+            zone.add_record(record, lenient=lenient)
+        except DuplicateRecordException:
+            self.log.warning(f"Skipping duplicated record: {record}")
+        except SubzoneRecordException:
+            self.log.warning(f"Skipping subzone record: {record}")
 
     def _populate_PTR(self, zone, family, lenient):
         zone_length = len(zone.name.split(".")[:-3])
@@ -146,13 +170,13 @@ class NetboxSource(BaseSource):
         ipam_records = self._nb_client.ipam.ip_addresses.filter(
             parent=parent,
             family=family,
-            vrf_id=self._populate_vrf_id,
-            tag=self._populate_tags,
+            vrf_id=self.populate_vrf_id,
+            tag=self.populate_tags,
         )
 
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
-            fqdn_base = ipam_record[self._name_field]
+            fqdn_base = ipam_record[self.field_name]
             fqdn = None
 
             if family == 4:
@@ -170,36 +194,18 @@ class NetboxSource(BaseSource):
             fqdn = fqdn_base.split(",")[0]
 
             if fqdn:
-                if fqdn[-1] != ".":
-                    fqdn = f"{fqdn}."
-
-                self.log.info(
-                    f"PTR record added: zone={zone.name}, name={name}, value={fqdn}"
-                )
-                record = Record.new(
-                    zone,
-                    name,
-                    {"ttl": self._ttl, "type": "PTR", "value": f"{fqdn}"},
-                    source=self,
-                    lenient=lenient,
-                )
-                try:
-                    zone.add_record(record, lenient=lenient)
-                except DuplicateRecordException:
-                    self.log.warning(f"Skipping duplicated record: {record}")
+                self._add_record(zone, name, "PTR", fqdn, lenient)
 
     def _populate_normal(self, zone, lenient):
-        data = defaultdict(lambda: defaultdict(list))
-
-        kw = {f"{self._name_field}__ic": zone.name[:-1]}
+        kw = {f"{self.field_name}__ic": zone.name[:-1]}
         ipam_records = self._nb_client.ipam.ip_addresses.filter(
-            vrf_id=self._populate_vrf_id, tag=self._populate_tags, **kw
+            vrf_id=self.populate_vrf_id, tag=self.populate_tags, **kw
         )
 
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
             _type = "A" if ip_address.version == 4 else "AAAA"
-            fqdn_base = ipam_record[self._name_field]
+            fqdn_base = ipam_record[self.field_name]
 
             for fqdn in fqdn_base.split(","):
                 if fqdn[-1] != ".":
@@ -207,7 +213,8 @@ class NetboxSource(BaseSource):
 
                 if not fqdn.endswith(zone.name):
                     continue
-                if not self._populate_subdomains and (
+
+                if not self.populate_subdomains and (
                     fqdn.count(".") != zone.name.count(".") + 1
                 ):
                     # Skip subdomain records.
@@ -215,22 +222,6 @@ class NetboxSource(BaseSource):
                         f"{_type} record skipped: populate_subdomains=False, FQDN={fqdn}"
                     )
                     continue
-                name = zone.hostname_from_fqdn(fqdn)
-                data[name][_type].append(ip_address.compressed)
 
-        for name, types in data.items():
-            for _type, d in types.items():
-                self.log.info(
-                    f"{_type} record added: zone={zone.name}, name={name}, values={d}"
-                )
-                record = Record.new(
-                    zone,
-                    name,
-                    {"ttl": self._ttl, "type": _type, "values": d},
-                    source=self,
-                    lenient=lenient,
-                )
-                try:
-                    zone.add_record(record, lenient=lenient)
-                except SubzoneRecordException:
-                    self.log.warning(f"Skipping subzone record: {record}")
+                name = zone.hostname_from_fqdn(fqdn)
+                self._add_record(zone, name, _type, ip_address.compressed, lenient)

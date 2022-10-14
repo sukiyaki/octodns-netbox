@@ -1,4 +1,26 @@
+[build-system]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
+build-backend = "poetry_dynamic_versioning.backend"
+
 [tool]
+
+[tool.black]
+line-length = 88
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
 
 [tool.poetry]
 name = "octodns-netbox"
@@ -26,10 +48,11 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.7,<4.0"
-
+typing-extensions = { version = "^4.2.0", python = "<3.8" }
 pynetbox = { version = "^6.6.2" }
 octodns = { version = "^0.9.20" }
 requests = { version = "^2.25.1" }
+pydantic = "^1.10.2"
 
 [tool.poetry.dev-dependencies]
 pre-commit = "^2.19.0"
@@ -44,25 +67,3 @@ vcs = "git"
 style = "pep440"
 metadata = false
 bump = true
-
-[build-system]
-requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
-build-backend = "poetry_dynamic_versioning.backend"
-
-[tool.black]
-line-length = 88
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
