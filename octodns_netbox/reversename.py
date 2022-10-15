@@ -66,16 +66,16 @@ def to_network_v6(zone: Zone) -> ipaddress.IPv6Network:
 def from_address(
     zone: Zone, ip_address: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 ) -> str:
-    if zone.name.endswith(".in-addr.arpa.") or zone.name.endswith(".ip6.arpa."):
-        fqdn = f"{ip_address.reverse_pointer}."
-
-        if zone.name in fqdn:
-            return fqdn
-        else:
-            zone_labels = zone.name.split(".")
-            standard_labels = fqdn.split(".")
-            for i in range(0, len(zone_labels) - len(standard_labels) + 1):
-                zone_labels.insert(0, standard_labels[i])
-            return ".".join(zone_labels)
-    else:
+    if not zone.name.endswith((".in-addr.arpa.", ".ip6.arpa.")):
         raise ValueError("Invalid reverse IPv4/IPv6 zone")
+
+    fqdn = f"{ip_address.reverse_pointer}."
+
+    if zone.name in fqdn:
+        return fqdn
+
+    zone_labels = zone.name.split(".")
+    standard_labels = fqdn.split(".")
+    for i in range(0, len(zone_labels) - len(standard_labels) + 1):
+        zone_labels.insert(0, standard_labels[i])
+    return ".".join(zone_labels)
