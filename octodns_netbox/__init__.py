@@ -24,6 +24,8 @@ from octodns.source.base import BaseSource
 from octodns.zone import DuplicateRecordException, SubzoneRecordException, Zone
 from pydantic import AnyHttpUrl, BaseModel, Extra, validator
 
+import octodns_netbox.reversename
+
 
 class NetboxSourceConfig(BaseModel):
     SUPPORTS_GEO: bool = False
@@ -141,34 +143,11 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         except SubzoneRecordException:
             self.log.warning(f"Skipping subzone record: {record}")
 
-    def _populate_PTR(self, zone, family, lenient):
-        zone_length = len(zone.name.split(".")[:-3])
-
-        if family == 4:
-            if zone_length > 3:
-                # parent = networkaddr/mask
-                parent = ".".join(zone.name.split(".")[:-3][::-1])
-            else:
-                # parent = networkaddr
-                parent = ".".join(zone.name.split(".")[:-3][::-1])
-                for _ in range(4 - zone_length):
-                    parent += ".0"
-                parent += "/{}".format(8 * zone_length)
-        elif family == 6:
-            zone_reverse_str = "".join(zone.name.split(".")[:-3][::-1])
-            if len(zone_reverse_str) % 4 != 0:
-                for _ in range(4 - (len(zone_reverse_str) % 4)):
-                    zone_reverse_str += "0"
-            parent = ":".join(
-                [
-                    zone_reverse_str[i : i + 4]
-                    for i in range(0, len(zone_reverse_str), 4)
-                ]
-            )
-            parent += "::/{}".format(zone_length * 4)
+    def _populate_PTR(self, zone: Zone, family: Literal[4, 6], lenient: bool):
+        network = octodns_netbox.reversename.to_network(zone)
 
         ipam_records = self._nb_client.ipam.ip_addresses.filter(
-            parent=parent,
+            parent=network.compressed,
             family=family,
             vrf_id=self.populate_vrf_id,
             tag=self.populate_tags,
@@ -176,27 +155,16 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
 
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
-            fqdn_base = ipam_record[self.field_name]
-            fqdn = None
-
-            if family == 4:
-                if zone_length > 3:
-                    _name = "{}.{}".format(
-                        ip_address.compressed.split(".")[-1], zone.name
-                    )
-                    name = zone.hostname_from_fqdn(_name)
-                else:
-                    name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
-            elif family == 6:
-                name = zone.hostname_from_fqdn(ip_address.reverse_pointer)
-
+            name = zone.hostname_from_fqdn(
+                octodns_netbox.reversename.from_address(zone, ip_address)
+            )
             # take the first fqdn
-            fqdn = fqdn_base.split(",")[0]
+            fqdn = ipam_record[self.field_name].split(",")[0]
 
             if fqdn:
                 self._add_record(zone, name, "PTR", fqdn, lenient)
 
-    def _populate_normal(self, zone, lenient):
+    def _populate_normal(self, zone: Zone, lenient: bool):
         kw = {f"{self.field_name}__ic": zone.name[:-1]}
         ipam_records = self._nb_client.ipam.ip_addresses.filter(
             vrf_id=self.populate_vrf_id, tag=self.populate_tags, **kw
@@ -204,7 +172,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
 
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
-            _type = "A" if ip_address.version == 4 else "AAAA"
+            _type: Literal["A", "AAAA"] = "A" if ip_address.version == 4 else "AAAA"
             fqdn_base = ipam_record[self.field_name]
 
             for fqdn in fqdn_base.split(","):
