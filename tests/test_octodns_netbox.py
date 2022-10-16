@@ -57,12 +57,12 @@ def mock_requests():
             json=load_fixture("ip_addresses_v4_octet_boundary_duplicated_address.json"),
         )
         mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3A0db8%3A0000%3A0000%3A0000%3A0000%3A0000%3A%3A%2F100&family=6&limit=0",
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F100&family=6&limit=0",
             complete_qs=True,
             json=load_fixture("ip_addresses_v6_non_nibble_boundary.json"),
         )
         mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3A0db8%3A0000%3A0000%3A%3A%2F64&family=6&limit=0",
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F64&family=6&limit=0",
             complete_qs=True,
             json=load_fixture("ip_addresses_v6_nibble_boundary.json"),
         )
