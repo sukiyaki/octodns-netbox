@@ -19,7 +19,7 @@ else:
 
 import pynetbox
 import requests
-from octodns.record import Record
+from octodns.record import Record, Rr
 from octodns.source.base import BaseSource
 from octodns.zone import DuplicateRecordException, SubzoneRecordException, Zone
 from pydantic import AnyHttpUrl, BaseModel, Extra, validator
@@ -28,6 +28,7 @@ import octodns_netbox.reversename
 
 
 class NetboxSourceConfig(BaseModel):
+    SUPPORTS_MULTIVALUE_PTR: bool = True
     SUPPORTS_GEO: bool = False
     SUPPORTS_DYNAMIC: bool = False
     SUPPORTS: typing.Set[str] = set(("A", "AAAA", "PTR"))
@@ -37,7 +38,7 @@ class NetboxSourceConfig(BaseModel):
     token: str
     field_name: str = "description"
     populate_tags: typing.List[str] = []
-    populate_vrf_id: typing.Optional[int] = None
+    populate_vrf_id: typing.Optional[typing.Union[int, Literal["null"]]] = None
     populate_vrf_name: typing.Optional[str] = None
     populate_subdomains: bool = True
     ttl: int = 60
@@ -82,13 +83,12 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         session.verify = self.ssl_verify
         self._nb_client.http_session = session
 
-        if (
-            self.populate_vrf_id is not None
-            and self._nb_client.ipam.vrfs.get(self.populate_vrf_id) is None
-        ):
-            raise ValueError(
-                "Failed to retrive vrf information by id, check populate_vrf_id"
-            )
+        self._populate_vrf()
+
+    def _populate_vrf(self) -> None:
+        if self.populate_vrf_name == "Global" or self.populate_vrf_id == 0:
+            self.populate_vrf_id = "null"
+            return
 
         if self.populate_vrf_name is not None:
             try:
@@ -107,43 +107,32 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         before = len(zone.records)
 
         if zone.name.endswith(".in-addr.arpa."):
-            self._populate_PTR(zone, family=4, lenient=lenient)
+            rrs = self._populate_PTR(zone, family=4)
         elif zone.name.endswith(".ip6.arpa."):
-            self._populate_PTR(zone, family=6, lenient=lenient)
+            rrs = self._populate_PTR(zone, family=6)
         else:
-            self._populate_normal(zone, lenient)
+            rrs = self._populate_normal(zone)
+
+        self._add_record(zone, rrs, lenient)
 
         self.log.info("populate:   found %s records", len(zone.records) - before)
 
     def _add_record(
         self,
         zone: Zone,
-        name: str,
-        _type: Literal["A", "AAAA", "PTR"],
-        value: str,
+        rrs: typing.List[Rr],
         lenient: bool,
     ):
-        if _type == "PTR" and value[-1] != ".":
-            value = f"{value}."
+        rrs = [rr for rr in rrs if self.populate_subdomains or rr.name.count(".") == 0]
 
-        self.log.info(
-            f"{_type} record added: zone={zone.name}, name={name}, value={value}"
-        )
-        record = Record.new(
-            zone,
-            name,
-            {"ttl": self.ttl, "type": _type, "value": f"{value}"},
-            source=self,
-            lenient=lenient,
-        )
-        try:
-            zone.add_record(record, lenient=lenient)
-        except DuplicateRecordException:
-            self.log.warning(f"Skipping duplicated record: {record}")
-        except SubzoneRecordException:
-            self.log.warning(f"Skipping subzone record: {record}")
+        for record in Record.from_rrs(zone, rrs, lenient=lenient):
+            try:
+                zone.add_record(record, lenient=lenient)
+            except SubzoneRecordException:
+                self.log.warning(f"Skipping subzone record: {record}")
 
-    def _populate_PTR(self, zone: Zone, family: Literal[4, 6], lenient: bool):
+    def _populate_PTR(self, zone: Zone, family: Literal[4, 6]) -> typing.List[Rr]:
+        ret = []
         network = octodns_netbox.reversename.to_network(zone)
 
         ipam_records = self._nb_client.ipam.ip_addresses.filter(
@@ -159,12 +148,21 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
                 octodns_netbox.reversename.from_address(zone, ip_address)
             )
             # take the first fqdn
-            fqdn = ipam_record[self.field_name].split(",")[0]
+            fqdns = [
+                fqdn if fqdn[-1] == "." else f"{fqdn}."
+                for fqdn in ipam_record[self.field_name].split(",")
+            ]
 
-            if fqdn:
-                self._add_record(zone, name, "PTR", fqdn, lenient)
+            for fqdn in fqdns:
+                rr = Rr(name, "PTR", self.ttl, fqdn)
+                self.log.info(f"zone {zone.name} record added: {rr}")
+                ret.append(rr)
 
-    def _populate_normal(self, zone: Zone, lenient: bool):
+        return ret
+
+    def _populate_normal(self, zone: Zone) -> typing.List[Rr]:
+        ret = []
+
         kw = {f"{self.field_name}__ic": zone.name[:-1]}
         ipam_records = self._nb_client.ipam.ip_addresses.filter(
             vrf_id=self.populate_vrf_id, tag=self.populate_tags, **kw
@@ -173,23 +171,18 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
             _type: Literal["A", "AAAA"] = "A" if ip_address.version == 4 else "AAAA"
-            fqdn_base = ipam_record[self.field_name]
+            fqdns = [
+                fqdn if fqdn[-1] == "." else f"{fqdn}."
+                for fqdn in ipam_record[self.field_name].split(",")
+            ]
 
-            for fqdn in fqdn_base.split(","):
-                if fqdn[-1] != ".":
-                    fqdn = f"{fqdn}."
-
+            for fqdn in fqdns:
                 if not fqdn.endswith(zone.name):
                     continue
 
-                if not self.populate_subdomains and (
-                    fqdn.count(".") != zone.name.count(".") + 1
-                ):
-                    # Skip subdomain records.
-                    self.log.debug(
-                        f"{_type} record skipped: populate_subdomains=False, FQDN={fqdn}"
-                    )
-                    continue
-
                 name = zone.hostname_from_fqdn(fqdn)
-                self._add_record(zone, name, _type, ip_address.compressed, lenient)
+                rr = Rr(name, _type, self.ttl, ip_address.compressed)
+                self.log.info(f"zone {zone.name} record added: {rr}")
+                ret.append(rr)
+
+        return ret
