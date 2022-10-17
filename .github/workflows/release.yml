@@ -39,10 +39,15 @@ jobs:
         pip install poetry
         poetry self add "poetry-dynamic-versioning[plugin]"
 
+    - name: Push tag
+      run: |
+        git config user.name "${GITHUB_ACTOR}"
+        git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+        git tag -a "v${{ github.event.inputs.version }}" --force
+        git push origin "v${{ github.event.inputs.version }}" --force
+
     - name: Build wheels and source tarball
       run: >-
-        git tag v${{ github.event.inputs.version }}
-        git push origin v${{ github.event.inputs.version }}
         poetry build
 
     - name: show temporary files
