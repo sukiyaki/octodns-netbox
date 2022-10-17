@@ -28,9 +28,15 @@ Starting with [Netbox v2.6.0](https://github.com/netbox-community/netbox/issues/
 
 ### PTR records
 
-PTR records supported as well. Multiple PTR records on a single IP is not recommended, but is already properly supported by many providers. OctoDNS [supports it](https://github.com/octodns/octodns/pull/754) with backward compatibility, so that if your DNS provider does not support it, it will [properly handle it so that only single-value is stored](https://github.com/octodns/octodns/blob/6890e3307c7246720820e4dc8f18edc2c8bcf164/octodns/provider/base.py#L91-L102).
+PTR records supported as well. OctoDNS [supports Multiple PTR records on a single IP](https://github.com/octodns/octodns/pull/754), but it is not ot used much in productions. By default, `multivalue_ptr: false` is set and the first FQDN in the field will be used to generate the PTR record.
 
-#### 🔍 Example
+#### 🔍 Example (`multivalue_ptr: false` - default)
+- IP Address: `192.0.2.1/24`
+  - Description: `en0.host1.example.com,host1.example.com`
+- DNS Zone: `2.0.192.in-addr.arpa.`
+  - `1. PTR en0.host1.example.com`
+
+#### 🔍 Example (`multivalue_ptr: true`)
 - IP Address: `192.0.2.1/24`
   - Description: `en0.host1.example.com,host1.example.com`
 - DNS Zone: `2.0.192.in-addr.arpa.`
@@ -89,6 +95,10 @@ providers:
     # If there are multiple VRFs with the same name, it would be better to use `populate_vrf_id`.
     # If `Global`, explicitly points for global VRF.
     populate_vrf_name: mgmt
+    # Multi-value PTR records support (Optional, default: `false`)
+    # If `true`, multiple-valued PTR records will be generated.
+    # If `false`, the first FQDN value in the field will be used.
+    multivalue_ptr: true
 
   route53:
     class: octodns_route53.Route53Provider

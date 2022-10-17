@@ -28,7 +28,8 @@ import octodns_netbox.reversename
 
 
 class NetboxSourceConfig(BaseModel):
-    SUPPORTS_MULTIVALUE_PTR: bool = True
+    multivalue_ptr: bool = False
+    SUPPORTS_MULTIVALUE_PTR: bool = multivalue_ptr
     SUPPORTS_GEO: bool = False
     SUPPORTS_DYNAMIC: bool = False
     SUPPORTS: typing.Set[str] = set(("A", "AAAA", "PTR"))
@@ -150,10 +151,10 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
                 octodns_netbox.reversename.from_address(zone, ip_address)
             )
             # take the first fqdn
-            fqdns = [
-                fqdn if fqdn[-1] == "." else f"{fqdn}."
-                for fqdn in ipam_record[self.field_name].split(",")
-            ]
+            fqdns = self._get_fqdns_list(
+                ipam_record[self.field_name],
+                len_limit=1 if not self.multivalue_ptr else None,
+            )
 
             for fqdn in fqdns:
                 rr = Rr(name, "PTR", self.ttl, fqdn)
@@ -173,10 +174,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
             _type: Literal["A", "AAAA"] = "A" if ip_address.version == 4 else "AAAA"
-            fqdns = [
-                fqdn if fqdn[-1] == "." else f"{fqdn}."
-                for fqdn in ipam_record[self.field_name].split(",")
-            ]
+            fqdns = self._get_fqdns_list(ipam_record[self.field_name])
 
             for fqdn in fqdns:
                 if not fqdn.endswith(zone.name):
@@ -188,3 +186,11 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
                 ret.append(rr)
 
         return ret
+
+    def _get_fqdns_list(
+        self, field_value: str, len_limit: typing.Optional[int] = None
+    ) -> typing.List[str]:
+        ret = [
+            fqdn if fqdn[-1] == "." else f"{fqdn}." for fqdn in field_value.split(",")
+        ]
+        return ret[:len_limit]
