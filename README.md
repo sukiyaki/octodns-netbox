@@ -10,6 +10,12 @@ You can have complete control over your DNS records with Netbox!
 
 ⚠️ This is a **source** for octoDNS! We can only serve to populate records into a zone, cannot be synced **to** Netbox.
 
+## Installation
+
+```
+pip install octodns-netbox
+```
+
 ## Getting started
 
 ### A records / AAAA records
