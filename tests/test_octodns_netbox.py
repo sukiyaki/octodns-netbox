@@ -501,7 +501,46 @@ class TestNetboxSourcePopulateIPv4PTROctecBoundary:
     def test_populate_PTR_v4_octet_boundary(self):
         zone = Zone("2.0.192.in-addr.arpa.", [])
         source = NetboxSource(
-            "test", url="http://netbox.example.com/", token="testtoken"
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+        )
+        source.populate(zone)
+
+        assert len(zone.records) == 2
+
+        expected = Zone("2.0.192.in-addr.arpa.", [])
+        for name, data in (
+            (
+                "1",
+                {
+                    "type": "PTR",
+                    "ttl": 60,
+                    "values": ["description-192-0-2-1.example.com."],
+                },
+            ),
+            (
+                "2",
+                {
+                    "type": "PTR",
+                    "ttl": 60,
+                    "values": ["description-192-0-2-2.example.com."],
+                },
+            ),
+        ):
+            record = Record.new(expected, name, data)
+            expected.add_record(record)
+
+        changes = expected.changes(zone, SimpleProvider())
+        assert changes == []
+
+    def test_populate_PTR_v4_octet_boundary_multivalue_ptr_enabled(self):
+        zone = Zone("2.0.192.in-addr.arpa.", [])
+        source = NetboxSource(
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            multivalue_ptr=True,
         )
         source.populate(zone)
 
