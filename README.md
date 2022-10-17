@@ -1,4 +1,4 @@
-## A [NetBox](https://github.com/digitalocean/netbox) source for [octoDNS](https://github.com/github/octodns/)
+#  A [NetBox](https://github.com/digitalocean/netbox) source for [octoDNS](https://github.com/github/octodns/)
 
 [![PyPI](https://img.shields.io/pypi/v/octodns-netbox)](https://pypi.python.org/pypi/octodns-netbox)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/octodns-netbox)](https://pypi.python.org/pypi/octodns-netbox)
@@ -6,29 +6,49 @@
 [![Code Climate coverage](https://img.shields.io/codeclimate/coverage/sukiyaki/octodns-netbox)](https://codeclimate.com/github/sukiyaki/octodns-netbox)
 [![Code Climate maintainability](https://img.shields.io/codeclimate/maintainability/sukiyaki/octodns-netbox)](https://codeclimate.com/github/sukiyaki/octodns-netbox)
 
-NetBox is not intended to be used as a full DNS management application. However, with this project, you will have complete control over your DNS records with Netbox!
+You can have complete control over your DNS records with Netbox!
 
 ⚠️ This is a **source** for octoDNS! We can only serve to populate records into a zone, cannot be synced **to** Netbox.
 
-Based on IP address information managed by NetBox, this automatically creating A/AAAA records and their corresponding PTR records. In order to generate these records, Netbox must have the correct information on what FQDNs correspond to IP addresses. We use the `description` field as a comma-separated list of hostnames (FQDNs).
+## Getting started
 
-For instance, if you have `192.0.2.1/26` in your Netbox and `en0.host1.example.com,host1.example.com` is entered in its description field, you can use this source as shown in the sample configuration below, you will get three records. That is `en0.host1.example.com. A 192.0.2.1`, `host1.example.com. A 192.0.2.1` and `1.0/26.2.0.192.in-addr.arpa. PTR en0.host1.example.com.`! 🎉
+### A records / AAAA records
 
-Starting with [Netbox v2.6.0](https://github.com/netbox-community/netbox/issues/166), IPAddress now has a `dns_name` field. If you want to utilize this field, just set `field_name: dns_name` to your configuration. However, [I don't know why](https://github.com/netbox-community/netbox/discussions/9232), this field can only store **single** FQDN. So you would probably be more comfortable using the `description` field as a comma-separated list, since it is not possible to do complex DNS record management.
+This source retrieves IP address information from Netbox and creates A/AAAA records for octoDNS. For this purpose, it is essential to manage the mapping between IP addresses and FQDNs in Netbox. We use a `description` field as a comma-separated list of hostnames (FQDNs).
 
-### Example Configuration
+#### 🚨 `dns_name` field
+Starting with [Netbox v2.6.0](https://github.com/netbox-community/netbox/issues/166), IPAddress now has a `dns_name` field. But we **do not** use this field by default because this `dns_name` field can only store **single** FQDN. To use a `dns_name` field, set `field_name: dns_name` in [the configuration](#example-configuration).
 
-The following config will combine the records in `./config/example.com.yaml` and the dynamically looked up addresses at NetBox.
+#### 🔍 Example
+- IP Address: `192.0.2.1/24`
+  - Description: `en0.host1.example.com,host1.example.com`
+- DNS Zone: `example.com.`
+  - `en0.host1. A 192.0.2.1`
+  - `host1. A 192.0.2.1`
+
+### PTR records
+
+PTR records supported as well. Multiple PTR records on a single IP is not recommended so the first FQDN in the field will be used.
+
+#### 🔍 Example
+- IP Address: `192.0.2.1/24`
+  - Description: `en0.host1.example.com,host1.example.com`
+- DNS Zone: `2.0.192.in-addr.arpa.`
+  - `1. PTR en0.host1.example.com`
+
+#### Classless subnet delegation (IPv4 /31 to /25)
+
+When creating classless reverse lookup zones, we support two notation as the following ones:
+
+- `<subnet>-<subnet mask bit count>.2.0.192.in-addr.arpa` ([RFC 4183](https://www.rfc-editor.org/rfc/rfc4183.html) alike) or
+- `<subnet>/<subnet mask bit count>.2.0.192.in-addr.arpa` ([RFC 2317](https://www.ietf.org/rfc/rfc2317.html) alike)
+
+## Example Configuration
 
 You must configure `url` and `token` to work with the [NetBox API](https://netbox.readthedocs.io/en/latest/api/overview/).
 
 ```yaml
 providers:
-
-  config:
-    class: octodns.provider.yaml.YamlProvider
-    directory: ./config
-
   netbox:
     class: octodns_netbox.NetboxSource
     # Your Netbox URL
@@ -76,7 +96,6 @@ providers:
 zones:
   example.com.:
     sources:
-      - config
       - netbox  # will add A/AAAA records
     targets:
       - route53
