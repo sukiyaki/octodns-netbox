@@ -32,32 +32,52 @@ def mock_requests():
             json=load_fixture("vrf.json"),
         )
         mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F27&family=4&limit=0",
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F27&family=4&description__empty=false&limit=0",
             complete_qs=True,
             json=load_fixture("ip_addresses_v4_non_octet_boundary.json"),
         )
         mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F27&family=4&vrf_id=1&limit=0",
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F27&family=4&dns_name__empty=false&limit=0",
+            complete_qs=True,
+            json=load_fixture("ip_addresses_v4_non_octet_boundary.json"),
+        )
+        mock.get(
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F27&family=4&vrf_id=1&description__empty=false&limit=0",
             complete_qs=True,
             json=load_fixture("ip_addresses_v4_non_octet_boundary_vrf_mgmt.json"),
         )
         mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F24&family=4&limit=0",
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F24&family=4&description__empty=false&limit=0",
             complete_qs=True,
             json=load_fixture("ip_addresses_v4_octet_boundary.json"),
         )
         mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.3.0%2F24&family=4&vrf_id=null&limit=0",
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F24&family=4&dns_name__empty=false&limit=0",
+            complete_qs=True,
+            json=load_fixture("ip_addresses_v4_octet_boundary.json"),
+        )
+        mock.get(
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.3.0%2F24&family=4&vrf_id=null&description__empty=false&limit=0",
             complete_qs=True,
             json=load_fixture("ip_addresses_v4_octet_boundary_vrf_global.json"),
         )
         mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F100&family=6&limit=0",
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F100&family=6&description__empty=false&limit=0",
             complete_qs=True,
             json=load_fixture("ip_addresses_v6_non_nibble_boundary.json"),
         )
         mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F64&family=6&limit=0",
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F100&family=6&dns_name__empty=false&limit=0",
+            complete_qs=True,
+            json=load_fixture("ip_addresses_v6_non_nibble_boundary.json"),
+        )
+        mock.get(
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F64&family=6&description__empty=false&limit=0",
+            complete_qs=True,
+            json=load_fixture("ip_addresses_v6_nibble_boundary.json"),
+        )
+        mock.get(
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F64&family=6&dns_name__empty=false&limit=0",
             complete_qs=True,
             json=load_fixture("ip_addresses_v6_nibble_boundary.json"),
         )

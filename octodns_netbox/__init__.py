@@ -135,11 +135,13 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         ret = []
         network = octodns_netbox.reversename.to_network(zone)
 
+        kw = {f"{self.field_name}__empty": "false"}
         ipam_records = self._nb_client.ipam.ip_addresses.filter(
             parent=network.compressed,
             family=family,
             vrf_id=self.populate_vrf_id,
             tag=self.populate_tags,
+            **kw,
         )
 
         for ipam_record in ipam_records:
