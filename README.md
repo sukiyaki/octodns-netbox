@@ -28,13 +28,14 @@ Starting with [Netbox v2.6.0](https://github.com/netbox-community/netbox/issues/
 
 ### PTR records
 
-PTR records supported as well. Multiple PTR records on a single IP is not recommended so the first FQDN in the field will be used.
+PTR records supported as well. Multiple PTR records on a single IP is not recommended, but is already properly supported by many providers. OctoDNS [supports it](https://github.com/octodns/octodns/pull/754) with backward compatibility, so that if your DNS provider does not support it, it will [properly handle it so that only single-value is stored](https://github.com/octodns/octodns/blob/6890e3307c7246720820e4dc8f18edc2c8bcf164/octodns/provider/base.py#L91-L102).
 
 #### 🔍 Example
 - IP Address: `192.0.2.1/24`
   - Description: `en0.host1.example.com,host1.example.com`
 - DNS Zone: `2.0.192.in-addr.arpa.`
   - `1. PTR en0.host1.example.com`
+  - `1. PTR host1.example.com`
 
 #### Classless subnet delegation (IPv4 /31 to /25)
 
@@ -81,11 +82,12 @@ providers:
     # VRF ID (Optional)
     # By default, all records are retrieved from Netbox, but it can be restricted
     # to only IP addresses assigned a specific VRF ID.
-    # Note that VRF ID here does not refer to RD, but to an number in Netbox.
+    # If `0`, explicitly points for global VRF.
     populate_vrf_id: 1
     # VRF Name (Optional)
     # VRF can also be specified by name.
     # If there are multiple VRFs with the same name, it would be better to use `populate_vrf_id`.
+    # If `Global`, explicitly points for global VRF.
     populate_vrf_name: mgmt
 
   route53:

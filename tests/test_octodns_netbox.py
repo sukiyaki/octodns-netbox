@@ -32,11 +32,6 @@ def mock_requests():
             json=load_fixture("vrf.json"),
         )
         mock.get(
-            "http://netbox.example.com/api/ipam/vrfs/10/",
-            json={"detail": "Not found."},
-            status_code=404,
-        )
-        mock.get(
             "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F27&family=4&limit=0",
             complete_qs=True,
             json=load_fixture("ip_addresses_v4_non_octet_boundary.json"),
@@ -52,9 +47,9 @@ def mock_requests():
             json=load_fixture("ip_addresses_v4_octet_boundary.json"),
         )
         mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.3.0%2F24&family=4&limit=0",
+            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.3.0%2F24&family=4&vrf_id=null&limit=0",
             complete_qs=True,
-            json=load_fixture("ip_addresses_v4_octet_boundary_duplicated_address.json"),
+            json=load_fixture("ip_addresses_v4_octet_boundary_vrf_global.json"),
         )
         mock.get(
             "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F100&family=6&limit=0",
@@ -175,7 +170,12 @@ class TestNetboxSourceFailSenarios:
                 "loc": ("populate_vrf_id",),
                 "msg": "value is not a valid integer",
                 "type": "type_error.integer",
-            }
+            },
+            {
+                "loc": ("populate_vrf_id",),
+                "msg": "unhashable type: 'list'",
+                "type": "type_error",
+            },
         ]
 
     def test_init_failed_due_to_invalid_populate_vrf_id_value(self):
@@ -191,7 +191,13 @@ class TestNetboxSourceFailSenarios:
                 "loc": ("populate_vrf_id",),
                 "msg": "value is not a valid integer",
                 "type": "type_error.integer",
-            }
+            },
+            {
+                "ctx": {"given": "ten", "permitted": ("null",)},
+                "loc": ("populate_vrf_id",),
+                "msg": "unexpected value; permitted: 'null'",
+                "type": "value_error.const",
+            },
         ]
 
     def test_init_failed_because_both_populate_vrf_id_populate_vrf_name_are_provided(
@@ -222,16 +228,6 @@ class TestNetboxSourceFailSenarios:
                 "type": "type_error.str",
             }
         ]
-
-    def test_init_failed_because_populate_vrf_id_is_not_found_at_netbox(self):
-        with pytest.raises(ValueError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_vrf_id=10,
-            )
-        assert "Failed to retrive vrf information by id" in str(excinfo.value)
 
     def test_init_failed_because_invalid_populate_vrf_name_is_not_found_at_netbox(self):
         with pytest.raises(ValueError) as excinfo:
@@ -489,7 +485,7 @@ class TestNetboxSourcePopulateIPv4PTROctecBoundary:
         )
         source.populate(zone)
 
-        assert len(zone.records) == 3
+        assert len(zone.records) == 2
 
         expected = Zone("2.0.192.in-addr.arpa.", [])
         for name, data in (
@@ -506,15 +502,10 @@ class TestNetboxSourcePopulateIPv4PTROctecBoundary:
                 {
                     "type": "PTR",
                     "ttl": 60,
-                    "values": ["description-192-0-2-2.example.com."],
-                },
-            ),
-            (
-                "3",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-192-0-2-3.example.com."],
+                    "values": [
+                        "description-192-0-2-2.example.com.",
+                        "description-multiptr-192-0-2-2.example.com.",
+                    ],
                 },
             ),
         ):
@@ -534,7 +525,7 @@ class TestNetboxSourcePopulateIPv4PTROctecBoundary:
         )
         source.populate(zone)
 
-        assert len(zone.records) == 3
+        assert len(zone.records) == 2
 
         expected = Zone("2.0.192.in-addr.arpa.", [])
         for name, data in (
@@ -554,12 +545,33 @@ class TestNetboxSourcePopulateIPv4PTROctecBoundary:
                     "values": ["dnsname-192-0-2-2.example.com."],
                 },
             ),
+        ):
+            record = Record.new(expected, name, data)
+            expected.add_record(record)
+
+        changes = expected.changes(zone, SimpleProvider())
+        assert changes == []
+
+    def test_populate_PTR_v4_octet_boundary_vrf_global_by_id(self):
+        zone = Zone("3.0.192.in-addr.arpa.", [])
+        source = NetboxSource(
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            populate_vrf_id=0,
+        )
+        source.populate(zone)
+
+        assert len(zone.records) == 1
+
+        expected = Zone("3.0.192.in-addr.arpa.", [])
+        for name, data in (
             (
-                "3",
+                "1",
                 {
                     "type": "PTR",
                     "ttl": 60,
-                    "values": ["dnsname-192-0-2-3.example.com."],
+                    "values": ["description-192-0-3-1.example.com."],
                 },
             ),
         ):
@@ -569,13 +581,13 @@ class TestNetboxSourcePopulateIPv4PTROctecBoundary:
         changes = expected.changes(zone, SimpleProvider())
         assert changes == []
 
-    def test_populate_PTR_v4_octet_boundary_duplicated_addresses(self):
-        # In this scenario, two identical IP addresses are returned from IPAM.
-        # This can happen when VRF is not specifically specified in octodns_netbox,
-        # even though they are actually managed on the Netbox using VRF.
+    def test_populate_PTR_v4_octet_boundary_vrf_global_by_name(self):
         zone = Zone("3.0.192.in-addr.arpa.", [])
         source = NetboxSource(
-            "test", url="http://netbox.example.com/", token="testtoken"
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            populate_vrf_name="Global",
         )
         source.populate(zone)
 
@@ -757,7 +769,7 @@ class TestNetboxSourcePopulateNormal:
         )
         source.populate(zone)
 
-        assert len(zone.records) == 8
+        assert len(zone.records) == 10
 
         expected = Zone("example.com.", [])
         for name, data in (
@@ -825,6 +837,22 @@ class TestNetboxSourcePopulateNormal:
                     "values": ["2001:db8::1:3"],
                 },
             ),
+            (
+                "description-roundrobin",
+                {
+                    "type": "A",
+                    "ttl": 60,
+                    "values": ["192.0.4.5", "192.0.4.6"],
+                },
+            ),
+            (
+                "description-roundrobin",
+                {
+                    "type": "AAAA",
+                    "ttl": 60,
+                    "values": ["2001:db8::1:5", "2001:db8::1:6"],
+                },
+            ),
         ):
             record = Record.new(expected, name, data)
             expected.add_record(record)
@@ -842,7 +870,7 @@ class TestNetboxSourcePopulateNormal:
         )
         source.populate(zone)
 
-        assert len(zone.records) == 5
+        assert len(zone.records) == 7
 
         expected = Zone("example.com.", [])
         for name, data in (
@@ -886,6 +914,22 @@ class TestNetboxSourcePopulateNormal:
                     "values": ["192.0.4.4"],
                 },
             ),
+            (
+                "dnsname-roundrobin",
+                {
+                    "type": "A",
+                    "ttl": 60,
+                    "values": ["192.0.4.5", "192.0.4.6"],
+                },
+            ),
+            (
+                "dnsname-roundrobin",
+                {
+                    "type": "AAAA",
+                    "ttl": 60,
+                    "values": ["2001:db8::1:5", "2001:db8::1:6"],
+                },
+            ),
         ):
             record = Record.new(expected, name, data)
             expected.add_record(record)
@@ -904,7 +948,7 @@ class TestNetboxSourcePopulateNormal:
         )
         source.populate(zone)
 
-        assert len(zone.records) == 3
+        assert len(zone.records) == 5
 
         expected = Zone("example.com.", [])
         for name, data in (
@@ -932,6 +976,22 @@ class TestNetboxSourcePopulateNormal:
                     "values": ["192.0.4.4"],
                 },
             ),
+            (
+                "dnsname-roundrobin",
+                {
+                    "type": "A",
+                    "ttl": 60,
+                    "values": ["192.0.4.5", "192.0.4.6"],
+                },
+            ),
+            (
+                "dnsname-roundrobin",
+                {
+                    "type": "AAAA",
+                    "ttl": 60,
+                    "values": ["2001:db8::1:5", "2001:db8::1:6"],
+                },
+            ),
         ):
             record = Record.new(expected, name, data)
             expected.add_record(record)
@@ -952,4 +1012,4 @@ class TestNetboxSourcePopulateNormal:
         source.populate(zone)
 
         assert "Skipping subzone record" in caplog.text
-        assert len(zone.records) == 2
+        assert len(zone.records) == 4

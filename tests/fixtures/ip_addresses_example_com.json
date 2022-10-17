@@ -116,6 +116,62 @@
             "last_updated": "2022-09-17T00:44:42.331660Z"
         },
         {
+            "id": 1593,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1593/",
+            "display": "192.0.4.5/24",
+            "family": {
+                "value": 4,
+                "label": "IPv4"
+            },
+            "address": "192.0.4.5/24",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-roundrobin.example.com",
+            "description": "description-roundrobin.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-11T00:00:00Z",
+            "last_updated": "2022-09-17T00:44:42.331660Z"
+        },
+        {
+            "id": 1594,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1594/",
+            "display": "192.0.4.6/24",
+            "family": {
+                "value": 4,
+                "label": "IPv4"
+            },
+            "address": "192.0.4.6/24",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-roundrobin.example.com",
+            "description": "description-roundrobin.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-11T00:00:00Z",
+            "last_updated": "2022-09-17T00:44:42.331660Z"
+        },
+        {
             "id": 1781,
             "url": "https://ipam.example.com/api/ipam/ip-addresses/1781/",
             "display": "2001:0db8::1:1/64",
@@ -194,6 +250,62 @@
             "nat_outside": [],
             "dns_name": "dnsname-host3.subdomain1.example.com.jp",
             "description": "description-host3.subdomain1.example.com.jp,description-host3.subdomain2.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-11T00:00:00Z",
+            "last_updated": "2022-09-11T06:12:26.757766Z"
+        },
+        {
+            "id": 1604,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1604/",
+            "display": "2001:0db8::1:5/64",
+            "family": {
+                "value": 6,
+                "label": "IPv6"
+            },
+            "address": "2001:0db8::1:5/64",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-roundrobin.example.com",
+            "description": "description-roundrobin.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-11T00:00:00Z",
+            "last_updated": "2022-09-11T06:12:26.757766Z"
+        },
+        {
+            "id": 1605,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1605/",
+            "display": "2001:0db8::1:6/64",
+            "family": {
+                "value": 6,
+                "label": "IPv6"
+            },
+            "address": "2001:0db8::1:6/64",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-roundrobin.example.com",
+            "description": "description-roundrobin.example.com",
             "tags": [],
             "custom_fields": {},
             "created": "2022-09-11T00:00:00Z",
