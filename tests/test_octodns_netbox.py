@@ -1061,7 +1061,7 @@ class TestNetboxSourcePopulateNormal:
     def test_populate_A_and_AAAA_field_is_dns_name_populate_and_defined_sub_zones(
         self, caplog
     ):
-        zone = Zone("example.com.", set(["subdomain1"]))
+        zone = Zone("example.com.", {"subdomain1"})
         source = NetboxSource(
             "test",
             url="http://netbox.example.com/",

@@ -32,12 +32,12 @@ def to_network_v4(zone: Zone) -> ipaddress.IPv4Network:
     if not last_label_parsed:
         raise ValueError("Faild to parse the zone name")
 
-    if last_label_parsed.group(2):
+    if last_label_parsed[2]:
         # non-octet boundary delegation detected
         # remove netmask and save it to the result
-        last_octect = last_label_parsed.group(1)
+        last_octect = last_label_parsed[1]
         labels[0] = last_octect
-        netmask = int(last_label_parsed.group(2)[1:])
+        netmask = int(last_label_parsed[2][1:])
 
     labels = ["0"] * offset + labels
     prefix_str = ".".join(reversed(labels))
@@ -76,6 +76,6 @@ def from_address(
 
     zone_labels = zone.name.split(".")
     standard_labels = fqdn.split(".")
-    for i in range(0, len(zone_labels) - len(standard_labels) + 1):
+    for i in range(len(zone_labels) - len(standard_labels) + 1):
         zone_labels.insert(0, standard_labels[i])
     return ".".join(zone_labels)
