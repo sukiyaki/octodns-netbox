@@ -49,14 +49,6 @@ jobs:
     - name: Test with tox
       run: tox
 
-    - name: 🚀 Publish code coverage to Codecov
-      uses: codecov/codecov-action@v3
-      if: ${{ success() }}
-      with:
-        fail_ci_if_error: true
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: coverage.xml
-
     - name: 📥 Upload coverage.xml to Artifact
       uses: actions/upload-artifact@v2
       with:
