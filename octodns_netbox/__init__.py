@@ -156,7 +156,6 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
                 len_limit=None if self.multivalue_ptr else 1,
             )
 
-
             for fqdn in fqdns:
                 rr = Rr(name, "PTR", self.ttl, fqdn)
                 self.log.info(f"zone {zone.name} record added: {rr}")
