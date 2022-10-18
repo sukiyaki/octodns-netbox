@@ -153,8 +153,9 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             # take the first fqdn
             fqdns = self._get_fqdns_list(
                 ipam_record[self.field_name],
-                len_limit=1 if not self.multivalue_ptr else None,
+                len_limit=None if self.multivalue_ptr else 1,
             )
+
 
             for fqdn in fqdns:
                 rr = Rr(name, "PTR", self.ttl, fqdn)
