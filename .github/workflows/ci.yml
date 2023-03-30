@@ -50,7 +50,7 @@ jobs:
       run: tox
 
     - name: 📥 Upload coverage.xml to Artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         path: ${{ github.workspace }}/coverage.xml
         name: ${{ github.run_number }}-coverage-${{ matrix.os }}-${{ matrix.python-versions }}
