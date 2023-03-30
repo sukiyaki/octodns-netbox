@@ -67,27 +67,27 @@ Here is an example configuration for octodns-netbox:
 providers:
   netbox:
     class: octodns_netbox.NetboxSource
-    
+
     # Your Netbox URL
     url: https://ipam.example.com
-    
+
     # Your Netbox Access Token (read-only)
     # This token should have read-only access to Netbox.
     token: env/NETBOX_TOKEN
-    
+
     # The TTL of the generated records (Optional, default: 60)
     # Time to Live (TTL) specifies the time interval that a DNS record is stored in cache.
     # The default value of 60 is commonly used for dynamic DNS records.
     ttl: 60
-    
+
     # Advanced Parameters:
     # The following parameters are optional and can be ignored for most use cases.
-    
+
     # Generate records including subdomains (Optional, default: `true`)
     # If `false`, only records that belong directly to the zone (domain) will be generated.
     # This can be useful to reduce the number of DNS queries and avoid `SubzoneRecordException` errors.
     populate_subdomains: true
-    
+
     # FQDN field name (Optional, default: `description`)
     # The `dns_name` field on Netbox is provided to hold only a single name,
     # but typically one IP address will correspond to multiple DNS records (FQDNs).
@@ -95,26 +95,26 @@ providers:
     # we use the `description` field to store multiple FQDNs, separated by commas.
     # Other tested values are `dns_name`.
     field_name: description
-    
+
     # Tag Name (Optional)
     # By default, all records are retrieved from Netbox, but it can be restricted
     # to only IP addresses assigned a specific tag.
     # Multiple values can be passed, resulting in a logical AND operation.
     populate_tags:
       - tag_name
-    
+
     # VRF ID (Optional)
     # By default, all records are retrieved from Netbox, but it can be restricted
     # to only IP addresses assigned a specific VRF ID.
     # If `0`, it explicitly points to the global VRF.
     populate_vrf_id: 1
-    
+
     # VRF Name (Optional)
     # VRF can also be specified by name.
     # If there are multiple VRFs with the same name, it would be better to use `populate_vrf_id`.
     # If `Global`, it explicitly points to the global VRF.
     populate_vrf_name: mgmt
-    
+
     # Multi-value PTR records support (Optional, default: `false`)
     # If `true`, multiple-valued PTR records will be generated.
     # If `false`, the first FQDN value in the field will be used.
