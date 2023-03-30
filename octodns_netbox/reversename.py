@@ -6,7 +6,6 @@ from octodns.zone import Zone
 
 
 def to_network(zone: Zone) -> Union[ipaddress.IPv4Network, ipaddress.IPv6Network]:
-
     if zone.name.endswith(".in-addr.arpa."):
         return to_network_v4(zone)
     elif zone.name.endswith(".ip6.arpa."):

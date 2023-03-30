@@ -11,11 +11,7 @@ import re
 import sys
 import typing
 from ipaddress import ip_interface
-
-if sys.version_info >= (3, 8):
-    from typing import Literal
-else:
-    from typing_extensions import Literal
+from typing import Literal
 
 import pynetbox
 import requests
