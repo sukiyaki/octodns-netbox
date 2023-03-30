@@ -18,8 +18,8 @@ repos:
   - id: forbid-new-submodules
   - id: trailing-whitespace
   - id: mixed-line-ending
-- repo: https://github.com/pre-commit/mirrors-isort
-  rev: v5.10.1
+- repo: https://github.com/pycqa/isort
+  rev: 5.12.0
   hooks:
   - id: isort
     files: \.py$
