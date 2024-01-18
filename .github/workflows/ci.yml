@@ -33,7 +33,7 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -72,7 +72,7 @@ jobs:
       run: ls -Rla ${{steps.download.outputs.download-path}}
 
     - name: 🚀 Publish code coverage to Code Climate
-      uses: paambaati/codeclimate-action@v4.0.0
+      uses: paambaati/codeclimate-action@v5.0.0
       env:
         CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
       with:
