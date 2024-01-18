@@ -11,7 +11,15 @@ import re
 import sys
 import typing
 from ipaddress import ip_interface
-from typing import Annotated, Literal
+
+if sys.version_info >= (3, 9):
+    from typing import Annotated, Literal
+elif sys.version_info >= (3, 8):
+    from typing import Literal
+
+    from typing_extensions import Annotated
+else:
+    from typing_extensions import Annotated, Literal
 
 import pynetbox
 import requests
