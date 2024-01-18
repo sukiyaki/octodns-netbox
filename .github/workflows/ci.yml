@@ -60,13 +60,13 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: 👀 Download all artifacts within the workflow run
       id: download
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
 
     - name: 🔍 Display structure of downloaded files
       run: ls -Rla ${{steps.download.outputs.download-path}}
@@ -93,7 +93,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
