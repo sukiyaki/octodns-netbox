@@ -11,55 +11,74 @@ import re
 import sys
 import typing
 from ipaddress import ip_interface
-from typing import Literal
+from typing import Annotated, Literal
 
 import pynetbox
 import requests
 from octodns.record import Record, Rr
 from octodns.source.base import BaseSource
 from octodns.zone import DuplicateRecordException, SubzoneRecordException, Zone
-from pydantic import AnyHttpUrl, BaseModel, Extra, validator
+from pydantic import (
+    AnyHttpUrl,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationInfo,
+    field_validator,
+)
 
 import octodns_netbox.reversename
 
+Url = Annotated[
+    str,
+    BeforeValidator(lambda value: str(TypeAdapter(AnyHttpUrl).validate_python(value))),
+]
+
 
 class NetboxSourceConfig(BaseModel):
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
     multivalue_ptr: bool = False
-    SUPPORTS_MULTIVALUE_PTR: bool = multivalue_ptr
+    SUPPORTS_MULTIVALUE_PTR_: bool = Field(
+        multivalue_ptr, alias="SUPPORTS_MULTIVALUE_PTR"
+    )
+    SUPPORTS_DYNAMIC_: bool = Field(False, alias="SUPPORTS_DYNAMIC")
     SUPPORTS_GEO: bool = False
-    SUPPORTS_DYNAMIC: bool = False
     SUPPORTS: typing.Set[str] = set(("A", "AAAA", "PTR"))
 
     id: str
-    url: AnyHttpUrl
+    url: Url
     token: str
     field_name: str = "description"
     populate_tags: typing.List[str] = []
-    populate_vrf_id: typing.Optional[typing.Union[int, Literal["null"]]] = None
-    populate_vrf_name: typing.Optional[str] = None
+    populate_vrf_id: Annotated[
+        typing.Union[int, Literal["null"], None], Field(validate_default=True)
+    ] = None
+    populate_vrf_name: Annotated[
+        typing.Optional[str], Field(validate_default=True)
+    ] = None
     populate_subdomains: bool = True
     ttl: int = 60
     ssl_verify: bool = True
     log: logging.Logger
 
-    @validator("url")
-    def check_url(cls, v):
+    @field_validator("url")
+    def check_url(cls, v) -> str:
         if re.search("/api/?$", v):
             v = re.sub("/api/?$", "", v)
         return v
 
-    @validator("populate_vrf_name")
-    def check_vrf_name(cls, v, values):
-        if "populate_vrf_id" in values and (
-            v is not None and values["populate_vrf_id"] is not None
+    @field_validator("populate_vrf_name")
+    def check_vrf_name(
+        cls, v: typing.Optional[str], info: ValidationInfo
+    ) -> typing.Optional[str]:
+        if "populate_vrf_id" in info.data and (
+            v is not None and info.data["populate_vrf_id"] is not None
         ):
             raise ValueError("Do not set both populate_vrf_id and populate_vrf")
         return v
-
-    class Config:
-        extra = Extra.allow
-        underscore_attrs_are_private = True
-        arbitrary_types_allowed = True
 
 
 class NetboxSource(BaseSource, NetboxSourceConfig):
