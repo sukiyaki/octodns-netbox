@@ -2,7 +2,7 @@ import pytest
 import requests_mock
 from octodns.record import Record
 from octodns.zone import Zone
-from pydantic.error_wrappers import ValidationError
+from pydantic import ValidationError
 
 from octodns_netbox import NetboxSource
 
@@ -99,17 +99,16 @@ class TestNetboxSourceFailSenarios:
     def test_init_failed_due_to_missing_url(self):
         with pytest.raises(ValidationError) as excinfo:
             NetboxSource("test")
-        assert excinfo.value.errors() == [
-            {"loc": ("url",), "msg": "field required", "type": "value_error.missing"},
-            {"loc": ("token",), "msg": "field required", "type": "value_error.missing"},
-        ]
+        assert excinfo.value.errors()[0]["loc"] == ("url",)
+        assert excinfo.value.errors()[0]["type"] == "missing"
+        assert excinfo.value.errors()[1]["loc"] == ("token",)
+        assert excinfo.value.errors()[1]["type"] == "missing"
 
     def test_init_failed_due_to_missing_token(self):
         with pytest.raises(ValidationError) as excinfo:
             NetboxSource("test", url="http://netbox.example.com/")
-        assert excinfo.value.errors() == [
-            {"loc": ("token",), "msg": "field required", "type": "value_error.missing"}
-        ]
+        assert excinfo.value.errors()[0]["loc"] == ("token",)
+        assert excinfo.value.errors()[0]["type"] == "missing"
 
     def test_init_maintain_backword_compatibility_for_url(self):
         source = NetboxSource(
@@ -127,39 +126,25 @@ class TestNetboxSourceFailSenarios:
                 token="testtoken",
                 field_name=["dns_name", "description"],
             )
-        assert excinfo.value.errors() == [
-            {
-                "loc": ("field_name",),
-                "msg": "str type expected",
-                "type": "type_error.str",
-            }
-        ]
+
+        assert excinfo.value.errors()[0]["loc"] == ("field_name",)
+        assert excinfo.value.errors()[0]["type"] == "string_type"
 
     def test_init_failed_due_to_invalid_ttl_type(self):
         with pytest.raises(ValidationError) as excinfo:
             NetboxSource(
                 "test", url="http://netbox.example.com/", token="testtoken", ttl=[10]
             )
-        assert excinfo.value.errors() == [
-            {
-                "loc": ("ttl",),
-                "msg": "value is not a valid integer",
-                "type": "type_error.integer",
-            }
-        ]
+        assert excinfo.value.errors()[0]["loc"] == ("ttl",)
+        assert excinfo.value.errors()[0]["type"] == "int_type"
 
     def test_init_failed_due_to_invalid_ttl_value(self):
         with pytest.raises(ValidationError) as excinfo:
             NetboxSource(
                 "test", url="http://netbox.example.com/", token="testtoken", ttl="ten"
             )
-        assert excinfo.value.errors() == [
-            {
-                "loc": ("ttl",),
-                "msg": "value is not a valid integer",
-                "type": "type_error.integer",
-            }
-        ]
+        assert excinfo.value.errors()[0]["loc"] == ("ttl",)
+        assert excinfo.value.errors()[0]["type"] == "int_parsing"
 
     def test_init_failed_due_to_invalid_populate_tags_type(self):
         with pytest.raises(ValidationError) as excinfo:
@@ -169,13 +154,8 @@ class TestNetboxSourceFailSenarios:
                 token="testtoken",
                 populate_tags="tag",
             )
-        assert excinfo.value.errors() == [
-            {
-                "loc": ("populate_tags",),
-                "msg": "value is not a valid list",
-                "type": "type_error.list",
-            }
-        ]
+        assert excinfo.value.errors()[0]["loc"] == ("populate_tags",)
+        assert excinfo.value.errors()[0]["type"] == "list_type"
 
     def test_init_failed_due_to_invalid_populate_vrf_id_type(self):
         with pytest.raises(ValidationError) as excinfo:
@@ -185,18 +165,13 @@ class TestNetboxSourceFailSenarios:
                 token="testtoken",
                 populate_vrf_id=[10],
             )
-        assert excinfo.value.errors() == [
-            {
-                "loc": ("populate_vrf_id",),
-                "msg": "value is not a valid integer",
-                "type": "type_error.integer",
-            },
-            {
-                "loc": ("populate_vrf_id",),
-                "msg": "unhashable type: 'list'",
-                "type": "type_error",
-            },
-        ]
+        assert excinfo.value.errors()[0]["loc"] == ("populate_vrf_id", "int")
+        assert excinfo.value.errors()[0]["type"] == "int_type"
+        assert excinfo.value.errors()[1]["loc"] == (
+            "populate_vrf_id",
+            "literal['null']",
+        )
+        assert excinfo.value.errors()[1]["type"] == "literal_error"
 
     def test_init_failed_due_to_invalid_populate_vrf_id_value(self):
         with pytest.raises(ValidationError) as excinfo:
@@ -206,19 +181,13 @@ class TestNetboxSourceFailSenarios:
                 token="testtoken",
                 populate_vrf_id="ten",
             )
-        assert excinfo.value.errors() == [
-            {
-                "loc": ("populate_vrf_id",),
-                "msg": "value is not a valid integer",
-                "type": "type_error.integer",
-            },
-            {
-                "ctx": {"given": "ten", "permitted": ("null",)},
-                "loc": ("populate_vrf_id",),
-                "msg": "unexpected value; permitted: 'null'",
-                "type": "value_error.const",
-            },
-        ]
+        assert excinfo.value.errors()[0]["loc"] == ("populate_vrf_id", "int")
+        assert excinfo.value.errors()[0]["type"] == "int_parsing"
+        assert excinfo.value.errors()[1]["loc"] == (
+            "populate_vrf_id",
+            "literal['null']",
+        )
+        assert excinfo.value.errors()[1]["type"] == "literal_error"
 
     def test_init_failed_because_both_populate_vrf_id_populate_vrf_name_are_provided(
         self,
@@ -241,13 +210,8 @@ class TestNetboxSourceFailSenarios:
                 token="testtoken",
                 populate_vrf_name=["TEST"],
             )
-        assert excinfo.value.errors() == [
-            {
-                "loc": ("populate_vrf_name",),
-                "msg": "str type expected",
-                "type": "type_error.str",
-            }
-        ]
+        assert excinfo.value.errors()[0]["loc"] == ("populate_vrf_name",)
+        assert excinfo.value.errors()[0]["type"] == "string_type"
 
     def test_init_failed_because_invalid_populate_vrf_name_is_not_found_at_netbox(self):
         with pytest.raises(ValueError) as excinfo:
@@ -267,13 +231,8 @@ class TestNetboxSourceFailSenarios:
                 token="testtoken",
                 populate_subdomains="ok",
             )
-        assert excinfo.value.errors() == [
-            {
-                "loc": ("populate_subdomains",),
-                "msg": "value could not be parsed to a boolean",
-                "type": "type_error.bool",
-            }
-        ]
+        assert excinfo.value.errors()[0]["loc"] == ("populate_subdomains",)
+        assert excinfo.value.errors()[0]["type"] == "bool_parsing"
 
 
 class TestNetboxSourcePopulateIPv4PTRNonOctecBoundary:
