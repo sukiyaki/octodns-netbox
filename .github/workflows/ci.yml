@@ -37,7 +37,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-versions }}
 
@@ -50,7 +50,7 @@ jobs:
       run: tox
 
     - name: 📥 Upload coverage.xml to Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         path: ${{ github.workspace }}/coverage.xml
         name: ${{ github.run_number }}-coverage-${{ matrix.os }}-${{ matrix.python-versions }}
@@ -81,7 +81,7 @@ jobs:
           ${{steps.download.outputs.download-path}}/${{ github.run_number }}-coverage-*/coverage.xml:coverage.py
 
     - name: 🗑 Delete artifacts within the workflow run
-      uses: geekyeggo/delete-artifact@v2
+      uses: geekyeggo/delete-artifact@v4
       if: always()
       with:
         name: ${{ github.run_number }}-coverage-*
@@ -97,7 +97,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
