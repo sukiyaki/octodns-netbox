@@ -5,7 +5,6 @@ Automatically creating A/AAAA records and their corresponding PTR records
 based on a NetBox API.
 """
 
-
 import logging
 import re
 import sys
@@ -64,9 +63,9 @@ class NetboxSourceConfig(BaseModel):
     populate_vrf_id: Annotated[
         typing.Union[int, Literal["null"], None], Field(validate_default=True)
     ] = None
-    populate_vrf_name: Annotated[
-        typing.Optional[str], Field(validate_default=True)
-    ] = None
+    populate_vrf_name: Annotated[typing.Optional[str], Field(validate_default=True)] = (
+        None
+    )
     populate_subdomains: bool = True
     ttl: int = 60
     ssl_verify: bool = True
