@@ -81,7 +81,7 @@ jobs:
           ${{steps.download.outputs.download-path}}/${{ github.run_number }}-coverage-*/coverage.xml:coverage.py
 
     - name: 🗑 Delete artifacts within the workflow run
-      uses: geekyeggo/delete-artifact@v4
+      uses: geekyeggo/delete-artifact@v5
       if: always()
       with:
         name: ${{ github.run_number }}-coverage-*
