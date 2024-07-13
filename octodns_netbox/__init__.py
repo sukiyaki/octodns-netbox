@@ -106,6 +106,15 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         session.verify = self.ssl_verify
         self._nb_client.http_session = session
 
+        self._nb_version = "1.x"
+        status = self._nb_client.status()
+        if "netbox-version" in status:
+            self._nb_version = status["netbox-version"]
+        elif "nautobot-version" in status:
+            self._nb_version = status["nautobot-version"]
+        else:
+            self.log.warning("Failed to detect NetBox version, assuming 1.x")
+
         self._populate_vrf()
 
     def _populate_vrf(self) -> None:
@@ -158,12 +167,16 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         ret = []
         network = octodns_netbox.reversename.to_network(zone)
 
-        kw = {f"{self.field_name}__empty": "false"}
+        vrf_filter_field = "vrfs" if self._nb_version.startswith("2.") else "vrf_id"
+        tag_filter_field = "tags" if self._nb_version.startswith("2.") else "tag"
+        kw = {
+            f"{self.field_name}__empty": "false",
+            f"{vrf_filter_field}": self.populate_vrf_id,
+            f"{tag_filter_field}": self.populate_tags,
+        }
         ipam_records = self._nb_client.ipam.ip_addresses.filter(
             parent=network.compressed,
             family=family,
-            vrf_id=self.populate_vrf_id,
-            tag=self.populate_tags,
             **kw,
         )
 
@@ -188,10 +201,14 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
     def _populate_normal(self, zone: Zone) -> typing.List[Rr]:
         ret = []
 
-        kw = {f"{self.field_name}__ic": zone.name[:-1]}
-        ipam_records = self._nb_client.ipam.ip_addresses.filter(
-            vrf_id=self.populate_vrf_id, tag=self.populate_tags, **kw
-        )
+        tag_filter_field = "tags" if self._nb_version.startswith("2.") else "tag"
+        vrf_filter_field = "vrfs" if self._nb_version.startswith("2.") else "vrf_id"
+        kw = {
+            f"{self.field_name}__ic": zone.name[:-1],
+            f"{vrf_filter_field}": self.populate_vrf_id,
+            f"{tag_filter_field}": self.populate_tags,
+        }
+        ipam_records = self._nb_client.ipam.ip_addresses.filter(**kw)
 
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
