@@ -107,11 +107,13 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         self._nb_client.http_session = session
 
         self._nb_version = "1.x"
+        self._is_nautobot = False
         status = self._nb_client.status()
         if "netbox-version" in status:
             self._nb_version = status["netbox-version"]
         elif "nautobot-version" in status:
             self._nb_version = status["nautobot-version"]
+            self._is_nautobot = True
         else:
             self.log.warning("Failed to detect NetBox version, assuming 1.x")
 
@@ -167,8 +169,16 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         ret = []
         network = octodns_netbox.reversename.to_network(zone)
 
-        vrf_filter_field = "vrfs" if self._nb_version.startswith("2.") else "vrf_id"
-        tag_filter_field = "tags" if self._nb_version.startswith("2.") else "tag"
+        vrf_filter_field = (
+            "vrfs"
+            if (self._is_nautobot and self._nb_version.startswith("2."))
+            else "vrf_id"
+        )
+        tag_filter_field = (
+            "tags"
+            if (self._is_nautobot and self._nb_version.startswith("2."))
+            else "tag"
+        )
         kw = {
             f"{self.field_name}__empty": "false",
             f"{vrf_filter_field}": self.populate_vrf_id,
@@ -201,8 +211,16 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
     def _populate_normal(self, zone: Zone) -> typing.List[Rr]:
         ret = []
 
-        tag_filter_field = "tags" if self._nb_version.startswith("2.") else "tag"
-        vrf_filter_field = "vrfs" if self._nb_version.startswith("2.") else "vrf_id"
+        vrf_filter_field = (
+            "vrfs"
+            if (self._is_nautobot and self._nb_version.startswith("2."))
+            else "vrf_id"
+        )
+        tag_filter_field = (
+            "tags"
+            if (self._is_nautobot and self._nb_version.startswith("2."))
+            else "tag"
+        )
         kw = {
             f"{self.field_name}__ic": zone.name[:-1],
             f"{vrf_filter_field}": self.populate_vrf_id,
