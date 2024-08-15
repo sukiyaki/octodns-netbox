@@ -158,14 +158,22 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         ret = []
         network = octodns_netbox.reversename.to_network(zone)
 
-        kw = {f"{self.field_name}__empty": "false"}
-        ipam_records = self._nb_client.ipam.ip_addresses.filter(
-            parent=network.compressed,
-            family=family,
-            vrf_id=self.populate_vrf_id,
-            tag=self.populate_tags,
-            **kw,
-        )
+        kw = {
+            f"{self.field_name}__empty": "false",
+            "parent": network.compressed,
+            "family": family,
+            "vrf_id": self.populate_vrf_id,
+            "tag": self.populate_tags,
+        }
+
+        # https://github.com/netbox-community/pynetbox/pull/545
+        # From pynetbox v7.4.0, None will be mapped to null.
+        # When vrf_id is null, it does not mean that it is not filtered by vrf_id,
+        # but it would be an intention that VRF is not set.
+        if kw["vrf_id"] is None:
+            del kw["vrf_id"]
+
+        ipam_records = self._nb_client.ipam.ip_addresses.filter(**kw)
 
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
@@ -188,10 +196,20 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
     def _populate_normal(self, zone: Zone) -> typing.List[Rr]:
         ret = []
 
-        kw = {f"{self.field_name}__ic": zone.name[:-1]}
-        ipam_records = self._nb_client.ipam.ip_addresses.filter(
-            vrf_id=self.populate_vrf_id, tag=self.populate_tags, **kw
-        )
+        kw = {
+            f"{self.field_name}__ic": zone.name[:-1],
+            "vrf_id": self.populate_vrf_id,
+            "tag": self.populate_tags,
+        }
+
+        # https://github.com/netbox-community/pynetbox/pull/545
+        # From pynetbox v7.4.0, None will be mapped to null.
+        # When vrf_id is null, it does not mean that it is not filtered by vrf_id,
+        # but it would be an intention that VRF is not set.
+        if kw["vrf_id"] is None:
+            del kw["vrf_id"]
+
+        ipam_records = self._nb_client.ipam.ip_addresses.filter(**kw)
 
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
