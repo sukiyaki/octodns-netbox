@@ -48,7 +48,7 @@ version = "0.0.0"
 
 [tool.poetry.dependencies]
 octodns = {version = "^1.0.0"}
-poetry = "^1.7.1"
+poetry = "^2.0.0"
 pydantic = "^2.0.0"
 pynetbox = {version = "^7.0.0"}
 python = ">=3.8,<4.0"
