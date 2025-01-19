@@ -197,7 +197,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         ret = []
 
         kw = {
-            f"{self.field_name}__ic": zone.name[:-1],
+            f"{self.field_name}__ic": f".{zone.name[:-1]}",
             "vrf_id": self.populate_vrf_id,
             "tag": self.populate_tags,
         }
