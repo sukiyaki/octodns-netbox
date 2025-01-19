@@ -24,7 +24,7 @@ import pynetbox
 import requests
 from octodns.record import Record, Rr
 from octodns.source.base import BaseSource
-from octodns.zone import DuplicateRecordException, SubzoneRecordException, Zone
+from octodns.zone import SubzoneRecordException, Zone
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
