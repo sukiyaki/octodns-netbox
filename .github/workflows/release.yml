@@ -20,7 +20,7 @@ jobs:
 
     strategy:
       matrix:
-        python-versions: ['3.11']
+        python-versions: ['3.13']
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -37,7 +37,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install poetry
-        poetry self add "poetry-dynamic-versioning[plugin]"
 
     - name: Push tag
       run: |

@@ -59,7 +59,7 @@ $ git clone git@github.com:your_name_here/octodns-netbox.git
 4. Install dependencies and start your virtualenv:
 
 ```
-$ poetry install
+$ poetry install --with dev
 ```
 
 5. Create a branch for local development:
