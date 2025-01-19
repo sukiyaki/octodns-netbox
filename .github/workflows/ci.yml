@@ -26,7 +26,7 @@ jobs:
     name: Build and Test
     strategy:
       matrix:
-        python-versions: ['3.8', '3.9', '3.10', '3.11']
+        python-versions: ['3.9', '3.10', '3.11', '3.12', '3.13']
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
 
@@ -44,7 +44,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install tox tox-gh-actions
+        pip install tox tox-gh-actions poetry
 
     - name: Test with tox
       run: tox
@@ -72,7 +72,7 @@ jobs:
       run: ls -Rla ${{steps.download.outputs.download-path}}
 
     - name: 🚀 Publish code coverage to Code Climate
-      uses: paambaati/codeclimate-action@v8.0.0
+      uses: paambaati/codeclimate-action@v9.0.0
       env:
         CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
       with:
@@ -99,13 +99,12 @@ jobs:
 
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.13'
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install poetry
-        poetry self add "poetry-dynamic-versioning[plugin]"
 
     - name: Build wheels and source tarball
       run: |
