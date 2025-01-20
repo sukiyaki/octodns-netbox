@@ -22,8 +22,7 @@ dependencies = [
   "octodns (>=1.10.0,<2.0.0)",
   "pydantic (>=2.10.5,<3.0.0)",
   "pynetbox (>=7.4.1,<8.0.0)",
-  "requests (>=2.32.3,<3.0.0)",
-  "typing-extensions (>=4.12.2,<5.0.0) ; python_version < '3.9'"
+  "requests (>=2.32.3,<3.0.0)"
 ]
 description = "A NetBox source for octoDNS."
 dynamic = ["version"]
