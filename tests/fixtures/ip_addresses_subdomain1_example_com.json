@@ -1,0 +1,175 @@
+{
+    "count": 6,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 1590,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1590/",
+            "display": "192.0.4.2/24",
+            "family": {
+                "value": 4,
+                "label": "IPv4"
+            },
+            "address": "192.0.4.2/24",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-host2.subdomain1.example.com",
+            "description": "description-host2.subdomain1.example.com,description-host2.subdomain2.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-11T00:00:00Z",
+            "last_updated": "2022-09-17T00:44:23.809693Z"
+        },
+        {
+            "id": 1591,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1591/",
+            "display": "192.0.4.3/24",
+            "family": {
+                "value": 4,
+                "label": "IPv4"
+            },
+            "address": "192.0.4.3/24",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-host3.subdomain1.example.com.jp",
+            "description": "description-host3.subdomain1.example.com.jp,description-host3.subdomain2.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-11T00:00:00Z",
+            "last_updated": "2022-09-17T00:44:42.331660Z"
+        },
+        {
+            "id": 1592,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1592/",
+            "display": "192.0.4.4/24",
+            "family": {
+                "value": 4,
+                "label": "IPv4"
+            },
+            "address": "192.0.4.4/24",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "subdomain1.example.com",
+            "description": "subdomain1.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-11T00:00:00Z",
+            "last_updated": "2022-09-17T00:44:42.331660Z"
+        },
+        {
+            "id": 1783,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1783/",
+            "display": "2001:0db8::1:2/64",
+            "family": {
+                "value": 6,
+                "label": "IPv6"
+            },
+            "address": "2001:0db8::1:2/64",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-host2.subdomain1.example.com",
+            "description": "description-host2.subdomain1.example.com,description-host2.subdomain2.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-21T07:41:47.800886Z",
+            "last_updated": "2022-09-21T07:41:47.800910Z"
+        },
+        {
+            "id": 1603,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1603/",
+            "display": "2001:0db8::1:3/64",
+            "family": {
+                "value": 6,
+                "label": "IPv6"
+            },
+            "address": "2001:0db8::1:3/64",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-host3.subdomain1.example.com.jp",
+            "description": "description-host3.subdomain1.example.com.jp,description-host3.subdomain2.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-11T00:00:00Z",
+            "last_updated": "2022-09-11T06:12:26.757766Z"
+        },
+        {
+            "id": 1784,
+            "url": "https://ipam.example.com/api/ipam/ip-addresses/1784/",
+            "display": "2001:0db8::1:4/64",
+            "family": {
+                "value": 6,
+                "label": "IPv6"
+            },
+            "address": "2001:0db8::1:4/64",
+            "vrf": null,
+            "tenant": null,
+            "status": {
+                "value": "active",
+                "label": "Active"
+            },
+            "role": null,
+            "assigned_object_type": null,
+            "assigned_object_id": null,
+            "assigned_object": null,
+            "nat_inside": null,
+            "nat_outside": [],
+            "dns_name": "dnsname-subdomain1.example.com",
+            "description": "description-subdomain1.example.com",
+            "tags": [],
+            "custom_fields": {},
+            "created": "2022-09-21T07:41:47.800886Z",
+            "last_updated": "2022-09-21T07:41:47.800910Z"
+        }
+    ]
+}

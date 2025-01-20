@@ -87,6 +87,11 @@ def mock_requests():
             json=load_fixture("ip_addresses_example_com.json"),
         )
         mock.get(
+            "http://netbox.example.com/api/ipam/ip-addresses/?description__ic=subdomain1.example.com&limit=0",
+            complete_qs=True,
+            json=load_fixture("ip_addresses_subdomain1_example_com.json"),
+        )
+        mock.get(
             "http://netbox.example.com/api/ipam/ip-addresses/?dns_name__ic=example.com&limit=0",
             complete_qs=True,
             json=load_fixture("ip_addresses_example_com.json"),
@@ -221,7 +226,7 @@ class TestNetboxSourceFailSenarios:
                 token="testtoken",
                 populate_vrf_name="TEST",
             )
-        assert "Failed to retrive vrf information by name" in str(excinfo.value)
+        assert "Failed to retrieve VRF information by name" in str(excinfo.value)
 
     def test_init_failed_due_to_invalid_populate_subdomains_type(self):
         with pytest.raises(ValidationError) as excinfo:
@@ -787,7 +792,7 @@ class TestNetboxSourcePopulateNormal:
         )
         source.populate(zone)
 
-        assert len(zone.records) == 10
+        assert len(zone.records) == 12
 
         expected = Zone("example.com.", [])
         for name, data in (
@@ -856,6 +861,14 @@ class TestNetboxSourcePopulateNormal:
                 },
             ),
             (
+                "description-subdomain1",
+                {
+                    "type": "AAAA",
+                    "ttl": 60,
+                    "values": ["2001:db8::1:4"],
+                },
+            ),
+            (
                 "description-roundrobin",
                 {
                     "type": "A",
@@ -869,6 +882,59 @@ class TestNetboxSourcePopulateNormal:
                     "type": "AAAA",
                     "ttl": 60,
                     "values": ["2001:db8::1:5", "2001:db8::1:6"],
+                },
+            ),
+            (
+                "",
+                {
+                    "type": "AAAA",
+                    "ttl": 60,
+                    "values": ["2001:db8::1:7"],
+                },
+            ),
+        ):
+            record = Record.new(expected, name, data)
+            expected.add_record(record)
+
+        changes = expected.changes(zone, SimpleProvider())
+        assert changes == []
+
+    def test_populate_populate_subdomains_is_False(self, caplog):
+        zone = Zone("subdomain1.example.com.", [])
+        source = NetboxSource(
+            "test",
+            url="http://netbox.example.com/",
+            token="testtoken",
+            populate_subdomains=False,
+        )
+        source.populate(zone)
+
+        assert len(zone.records) == 3
+
+        expected = Zone("example.com.", [])
+        for name, data in (
+            (
+                "",
+                {
+                    "type": "A",
+                    "ttl": 60,
+                    "values": ["192.0.4.4"],
+                },
+            ),
+            (
+                "description-host2",
+                {
+                    "type": "A",
+                    "ttl": 60,
+                    "values": ["192.0.4.2"],
+                },
+            ),
+            (
+                "description-host2",
+                {
+                    "type": "AAAA",
+                    "ttl": 60,
+                    "values": ["2001:db8::1:2"],
                 },
             ),
         ):
@@ -888,7 +954,7 @@ class TestNetboxSourcePopulateNormal:
         )
         source.populate(zone)
 
-        assert len(zone.records) == 7
+        assert len(zone.records) == 9
 
         expected = Zone("example.com.", [])
         for name, data in (
@@ -933,6 +999,14 @@ class TestNetboxSourcePopulateNormal:
                 },
             ),
             (
+                "dnsname-subdomain1",
+                {
+                    "type": "AAAA",
+                    "ttl": 60,
+                    "values": ["2001:db8::1:4"],
+                },
+            ),
+            (
                 "dnsname-roundrobin",
                 {
                     "type": "A",
@@ -946,6 +1020,14 @@ class TestNetboxSourcePopulateNormal:
                     "type": "AAAA",
                     "ttl": 60,
                     "values": ["2001:db8::1:5", "2001:db8::1:6"],
+                },
+            ),
+            (
+                "",
+                {
+                    "type": "AAAA",
+                    "ttl": 60,
+                    "values": "2001:db8::1:7",
                 },
             ),
         ):
@@ -966,7 +1048,7 @@ class TestNetboxSourcePopulateNormal:
         )
         source.populate(zone)
 
-        assert len(zone.records) == 5
+        assert len(zone.records) == 7
 
         expected = Zone("example.com.", [])
         for name, data in (
@@ -995,6 +1077,14 @@ class TestNetboxSourcePopulateNormal:
                 },
             ),
             (
+                "dnsname-subdomain1",
+                {
+                    "type": "AAAA",
+                    "ttl": 60,
+                    "values": ["2001:db8::1:4"],
+                },
+            ),
+            (
                 "dnsname-roundrobin",
                 {
                     "type": "A",
@@ -1008,6 +1098,14 @@ class TestNetboxSourcePopulateNormal:
                     "type": "AAAA",
                     "ttl": 60,
                     "values": ["2001:db8::1:5", "2001:db8::1:6"],
+                },
+            ),
+            (
+                "",
+                {
+                    "type": "AAAA",
+                    "ttl": 60,
+                    "values": "2001:db8::1:7",
                 },
             ),
         ):
@@ -1030,4 +1128,4 @@ class TestNetboxSourcePopulateNormal:
         source.populate(zone)
 
         assert "Skipping subzone record" in caplog.text
-        assert len(zone.records) == 4
+        assert len(zone.records) == 6

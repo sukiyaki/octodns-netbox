@@ -29,32 +29,32 @@ class TestToNetworkIPv4:
         zone_invalid_1 = Zone("300.10.in-addr.arpa.", [])
         with pytest.raises(ValueError) as excinfo:
             to_network(zone_invalid_1)
-        assert "Faild to parse the zone name" in str(excinfo.value)
+        assert "Failed to parse the leftmost IPv4 label" in str(excinfo.value)
 
         zone_invalid_2_1 = Zone("300-20.10.in-addr.arpa.", [])
         with pytest.raises(ValueError) as excinfo:
             to_network(zone_invalid_2_1)
-        assert "Faild to parse the zone name" in str(excinfo.value)
+        assert "Failed to parse the leftmost IPv4 label" in str(excinfo.value)
 
         zone_invalid_2_2 = Zone("300/20.10.in-addr.arpa.", [])
         with pytest.raises(ValueError) as excinfo:
             to_network(zone_invalid_2_2)
-        assert "Faild to parse the zone name" in str(excinfo.value)
+        assert "Failed to parse the leftmost IPv4 label" in str(excinfo.value)
 
         zone_invalid_3_1 = Zone("30-35.10.in-addr.arpa.", [])
         with pytest.raises(ValueError) as excinfo:
             to_network(zone_invalid_3_1)
-        assert "Faild to parse the zone name" in str(excinfo.value)
+        assert "Failed to parse the leftmost IPv4 label" in str(excinfo.value)
 
         zone_invalid_3_2 = Zone("30/35.10.in-addr.arpa.", [])
         with pytest.raises(ValueError) as excinfo:
             to_network(zone_invalid_3_2)
-        assert "Faild to parse the zone name" in str(excinfo.value)
+        assert "Failed to parse the leftmost IPv4 label" in str(excinfo.value)
 
         zone_invalid_4 = Zone("30/35.10.in-addr.arpa.example.com.", [])
         with pytest.raises(ValueError) as excinfo:
             to_network(zone_invalid_4)
-        assert "Invalid reverse IPv4/IPv6 zone" in str(excinfo.value)
+        assert "Invalid reverse zone" in str(excinfo.value)
 
 
 class TestToNetworkIPv6:
@@ -100,10 +100,10 @@ class TestFromAddressIPv4:
         )
 
     def test_from_address_fails_due_to_invalid_zone(self):
-        zone_rfc4183_1 = Zone("0-26.2.100.10.in-addr.arpa.example.com.", [])
+        zone_invalid_1 = Zone("10.in-addr.arpa.example.com.", [])
         with pytest.raises(ValueError) as excinfo:
-            from_address(zone_rfc4183_1, ipaddress.IPv4Address("10.100.2.1"))
-        assert "Invalid reverse IPv4/IPv6 zone" in str(excinfo.value)
+            from_address(zone_invalid_1, ipaddress.IPv4Address("10.100.2.1"))
+        assert "Invalid reverse zone" in str(excinfo.value)
 
 
 class TestFromAddressIPv6:
@@ -113,3 +113,11 @@ class TestFromAddressIPv6:
             from_address(zone_64, ipaddress.IPv6Address("2001:db8::1"))
             == "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa."
         )
+
+    def test_from_address_ipv6_fails_due_to_invalid_zone(self):
+        zone_invalid_1 = Zone(
+            "0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.example.com.", []
+        )
+        with pytest.raises(ValueError) as excinfo:
+            from_address(zone_invalid_1, ipaddress.IPv6Address("2001:db8::1"))
+        assert "Invalid reverse zone" in str(excinfo.value)
