@@ -50,7 +50,7 @@ jobs:
       run: tox
 
     - name: 📥 Upload coverage.xml to Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         path: ${{ github.workspace }}/coverage.xml
         name: ${{ github.run_number }}-coverage-${{ matrix.os }}-${{ matrix.python-versions }}
@@ -66,7 +66,7 @@ jobs:
 
     - name: 👀 Download all artifacts within the workflow run
       id: download
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
 
     - name: 🔍 Display structure of downloaded files
       run: ls -Rla ${{steps.download.outputs.download-path}}
