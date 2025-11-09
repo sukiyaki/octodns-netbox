@@ -3,8 +3,6 @@
 [![PyPI](https://img.shields.io/pypi/v/octodns-netbox)](https://pypi.python.org/pypi/octodns-netbox)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/octodns-netbox)](https://pypi.python.org/pypi/octodns-netbox)
 [![PyPI - License](https://img.shields.io/pypi/l/octodns-netbox)](LICENSE)
-[![Code Climate coverage](https://img.shields.io/codeclimate/coverage/sukiyaki/octodns-netbox)](https://codeclimate.com/github/sukiyaki/octodns-netbox)
-[![Code Climate maintainability](https://img.shields.io/codeclimate/maintainability/sukiyaki/octodns-netbox)](https://codeclimate.com/github/sukiyaki/octodns-netbox)
 
 This project provides a NetBox source for OctoDNS. It retrieves IP address information from NetBox so that OctoDNS creates corresponding A/AAAA and PTR records.
 

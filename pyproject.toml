@@ -12,11 +12,11 @@ classifiers = [
   'License :: OSI Approved :: MIT License',
   'Natural Language :: English',
   'Programming Language :: Python :: 3',
-  'Programming Language :: Python :: 3.9',
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
   'Programming Language :: Python :: 3.12',
-  'Programming Language :: Python :: 3.13'
+  'Programming Language :: Python :: 3.13',
+  'Programming Language :: Python :: 3.14'
 ]
 dependencies = [
   "octodns (>=1.10.0,<2.0.0)",
@@ -30,15 +30,15 @@ homepage = "https://github.com/sukiyaki/octodns-netbox"
 license = "MIT"
 name = "octodns-netbox"
 readme = "README.md"
-requires-python = ">=3.9,<4"
+requires-python = ">=3.10,<4"
 
 [tool.poetry]
 version = "0.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^4.0.0"
-pytest = "^8.0.0"
-pytest-cov = "^6.0.0"
+pytest = "^9.0.0"
+pytest-cov = "^7.0.0"
 requests-mock = "^1.12.0"
 tox = "^4.0.0"
 
