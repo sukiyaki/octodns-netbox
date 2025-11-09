@@ -26,18 +26,18 @@ jobs:
     name: Build and Test
     strategy:
       matrix:
-        python-versions: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        python-versions: ['3.10', '3.11', '3.12', '3.13', '3.14']
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-versions }}
 
@@ -49,43 +49,6 @@ jobs:
     - name: Test with tox
       run: tox
 
-    - name: 📥 Upload coverage.xml to Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        path: ${{ github.workspace }}/coverage.xml
-        name: ${{ github.run_number }}-coverage-${{ matrix.os }}-${{ matrix.python-versions }}
-
-  publish_coverage_codeclimate:
-    name: 🚀 Publish code coverage to Code Climate
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: 👀 Download all artifacts within the workflow run
-      id: download
-      uses: actions/download-artifact@v4
-
-    - name: 🔍 Display structure of downloaded files
-      run: ls -Rla ${{steps.download.outputs.download-path}}
-
-    - name: 🚀 Publish code coverage to Code Climate
-      uses: paambaati/codeclimate-action@v9.0.0
-      env:
-        CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-      with:
-        debug: true
-        coverageLocations: |
-          ${{steps.download.outputs.download-path}}/${{ github.run_number }}-coverage-*/coverage.xml:coverage.py
-
-    - name: 🗑 Delete artifacts within the workflow run
-      uses: geekyeggo/delete-artifact@v5
-      if: always()
-      with:
-        name: ${{ github.run_number }}-coverage-*
-
   publish_dev_build:
     # if test failed, we should not publish
     name: Publish (Test PyPI)
@@ -93,13 +56,13 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
-        python-version: '3.13'
+        python-version: '3.14'
 
     - name: Install dependencies
       run: |
