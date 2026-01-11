@@ -35,7 +35,7 @@ repos:
     args: [--ignore-missing-imports, --pretty]
     additional_dependencies: [types-requests]
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  rev: v2.15.0
+  rev: v2.16.0
   hooks:
   - id: pretty-format-yaml
     args: [--autofix]
