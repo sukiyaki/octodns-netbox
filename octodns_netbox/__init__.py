@@ -299,7 +299,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             )
             # Potentially multiple FQDNs in the designated field
             fqdns = self._parse_fqdns_list(
-                ipam_record[self.field_name],
+                self._get_field_value(ipam_record),
                 len_limit=None if self.multivalue_ptr else 1,
             )
             for fqdn in fqdns:
@@ -385,7 +385,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         record_type: Literal["A", "AAAA"] = "A" if ip_address.version == 4 else "AAAA"
 
         # Parse out any FQDNs listed in the desired NetBox field
-        fqdns = self._parse_fqdns_list(ipam_record[self.field_name])
+        fqdns = self._parse_fqdns_list(self._get_field_value(ipam_record))
 
         # For each FQDN, determine if it belongs to this zone and create records
         for fqdn in fqdns:
@@ -465,3 +465,30 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             if fqdn.strip()
         ]
         return fqdns[:len_limit] if len_limit else fqdns
+
+    def _get_field_value(self, ipam_record: typing.Any) -> str:
+        """
+        Retrieves the value of the configured field from an IPAM record.
+
+        Supports both standard fields (e.g., 'dns_name', 'description') and
+        custom fields (prefixed with 'cf_'). Custom fields are accessed via
+        the 'custom_fields' dictionary on the IPAM record.
+
+        Args:
+            ipam_record (Any): A single IPAM record from NetBox.
+
+        Returns:
+            str: The field value, or an empty string if the field is not set.
+
+        Examples:
+            - field_name='dns_name' -> ipam_record['dns_name']
+            - field_name='cf_additional_dns' -> ipam_record.custom_fields['additional_dns']
+        """
+        if self.field_name.startswith("cf_"):
+            # Custom field: strip 'cf_' prefix and access via custom_fields
+            custom_field_name = self.field_name[3:]
+            custom_fields = getattr(ipam_record, "custom_fields", {}) or {}
+            return custom_fields.get(custom_field_name, "") or ""
+        else:
+            # Standard field: access directly
+            return ipam_record[self.field_name] or ""
