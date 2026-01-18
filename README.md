@@ -33,6 +33,23 @@ To create A/AAAA records for octoDNS, you need to manage the mapping between IP 
 
 Starting with [Netbox v2.6.0](https://github.com/netbox-community/netbox/issues/166), Netbox now has a `dns_name` field in IP address records. But we **do not** use this field by default because this `dns_name` field can only store **single** FQDN. To use a `dns_name` field, set `field_name: dns_name` in [the configuration](#examples).
 
+### Custom fields
+
+You can also use NetBox custom fields to store DNS names. This is useful when you want to keep the `dns_name` field for the primary hostname and use a custom field for additional aliases.
+
+To use a custom field, prefix the field name with `cf_`. For example, if you have a custom field named `additional_dns` on IP addresses, configure it as:
+
+```yaml
+providers:
+  netbox-aliases:
+    class: octodns_netbox.NetboxSource
+    url: https://ipam.example.com
+    token: env/NETBOX_TOKEN
+    field_name: cf_additional_dns
+```
+
+The custom field should contain comma-separated FQDNs, just like the `description` field.
+
 ### PTR records
 
 `octodns-netbox` also supports PTR records. By default, only the first FQDN in the field is used to generate the PTR record, but you can enable multiple PTR records for a single IP by setting the `multivalue_ptr` parameter to `true` in [the configuration](#examples).
@@ -92,6 +109,10 @@ providers:
     # The `description` does not have any limitations so by default
     # we use the `description` field to store multiple FQDNs, separated by commas.
     # Other tested values are `dns_name`.
+    #
+    # Custom fields are also supported by using the `cf_` prefix.
+    # For example, if you have a custom field named `additional_dns`,
+    # set `field_name: cf_additional_dns`.
     field_name: description
 
     # Tag Name (Optional)
