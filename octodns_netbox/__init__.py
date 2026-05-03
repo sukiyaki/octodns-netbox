@@ -59,7 +59,7 @@ class NetboxSourceConfig(BaseModel):
     id: str
     url: Url
     token: str
-    field_name: str = "description"
+    field_name: typing.List[str] = ["description"]
     populate_tags: typing.List[str] = []
     populate_vrf_id: Annotated[
         typing.Union[int, Literal["null"], None], Field(validate_default=True)
@@ -85,6 +85,37 @@ class NetboxSourceConfig(BaseModel):
         """
         if re.search(r"/api/?$", v):
             v = re.sub(r"/api/?$", "", v)
+        return v
+
+    @field_validator("field_name", mode="before")
+    def normalize_field_name(cls, v: typing.Any) -> typing.List[str]:
+        """
+        Normalizes `field_name` to an ordered list of NetBox field names.
+
+        Accepts either a single string (legacy form) or a list of strings.
+        A single string is promoted to a single-element list so downstream
+        code always operates on a uniform list shape. The first element is
+        treated as the "primary" field for server-side filtering and for
+        single-valued PTR records.
+
+        Args:
+            v: The raw `field_name` value (str or list[str]).
+
+        Returns:
+            list[str]: A non-empty ordered list of NetBox field names.
+
+        Raises:
+            ValueError: If the list is empty or contains non-string / empty entries.
+        """
+        if isinstance(v, str):
+            v = [v]
+        if not isinstance(v, list) or not v:
+            raise ValueError(
+                "field_name must be a non-empty string or list of strings."
+            )
+        for entry in v:
+            if not isinstance(entry, str) or not entry.strip():
+                raise ValueError("field_name list entries must be non-empty strings.")
         return v
 
     @field_validator("populate_vrf_name")
@@ -241,26 +272,28 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             List[Rr]: A list of Rr objects for PTR records.
         """
         network = octodns_netbox.reversename.to_network(zone)
-        filter_kwargs = self._build_ptr_filter_kwargs(network, family)
-
-        ipam_records = self._nb_client.ipam.ip_addresses.filter(**filter_kwargs)
+        base_kwargs = self._build_ptr_filter_kwargs(network, family)
+        ipam_records = self._query_ip_addresses_per_field(
+            base_kwargs, field_filter_suffix="__empty", field_filter_value="false"
+        )
         return self._build_ptr_records(zone, ipam_records)
 
     def _build_ptr_filter_kwargs(
         self, network: typing.Any, family: Literal[4, 6]
     ) -> dict[str, typing.Any]:
         """
-        Builds the filter kwargs for NetBox queries when populating PTR records.
+        Builds the *base* filter kwargs (everything except the per-field part)
+        for NetBox queries when populating PTR records. The per-field part
+        (`<field>__empty=false`) is added per-query by `_query_ip_addresses_per_field`.
 
         Args:
             network (Any): The IP network derived from the reverse zone.
             family (Literal[4, 6]): The IP family (4 or 6).
 
         Returns:
-            dict[str, Any]: A dictionary of filter criteria for NetBox.
+            dict[str, Any]: Base filter criteria shared across all per-field queries.
         """
-        filter_kwargs = {
-            f"{self.field_name}__empty": "false",
+        filter_kwargs: dict[str, typing.Any] = {
             "parent": network.compressed,
             "family": family,
             "vrf_id": self.populate_vrf_id,
@@ -297,9 +330,12 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             ptr_name = zone.hostname_from_fqdn(
                 octodns_netbox.reversename.from_address(zone, ip_address)
             )
-            # Potentially multiple FQDNs in the designated field
-            fqdns = self._parse_fqdns_list(
-                self._get_field_value(ipam_record),
+            # Both PTR modes union across all configured fields with order-preserving
+            # dedup; single-valued PTR (default) caps the result at one FQDN, naturally
+            # falling through from an empty primary field to the next-non-empty field.
+            fqdns = self._collect_fqdns(
+                ipam_record,
+                fields=self.field_name,
                 len_limit=None if self.multivalue_ptr else 1,
             )
             for fqdn in fqdns:
@@ -318,30 +354,72 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         Returns:
             List[Rr]: A list of Rr objects for A/AAAA records.
         """
-        filter_kwargs = self._build_forward_filter_kwargs(zone)
-        ipam_records = self._nb_client.ipam.ip_addresses.filter(**filter_kwargs)
-
+        zone_name_no_dot = zone.name.rstrip(".")
+        base_kwargs = self._build_forward_filter_kwargs(zone)
+        ipam_records = self._query_ip_addresses_per_field(
+            base_kwargs,
+            field_filter_suffix="__ic",
+            field_filter_value=zone_name_no_dot,
+        )
         return self._build_forward_records(zone, ipam_records)
 
     def _build_forward_filter_kwargs(self, zone: Zone) -> dict[str, typing.Any]:
         """
-        Builds the filter kwargs for NetBox queries when populating forward A/AAAA records.
+        Builds the *base* filter kwargs (everything except the per-field part)
+        for NetBox queries when populating forward A/AAAA records. The per-field
+        part (`<field>__ic=<zone>`) is added per-query by
+        `_query_ip_addresses_per_field`.
 
         Args:
             zone (Zone): The forward zone for which to build query filters.
 
         Returns:
-            dict[str, Any]: A dictionary of filter criteria for NetBox queries.
+            dict[str, Any]: Base filter criteria shared across all per-field queries.
         """
-        zone_name_no_dot = zone.name.rstrip(".")
-        filter_kwargs = {
-            f"{self.field_name}__ic": zone_name_no_dot,
+        filter_kwargs: dict[str, typing.Any] = {
             "vrf_id": self.populate_vrf_id,
             "tag": self.populate_tags,
         }
         if filter_kwargs["vrf_id"] is None:
             del filter_kwargs["vrf_id"]
         return filter_kwargs
+
+    def _query_ip_addresses_per_field(
+        self,
+        base_kwargs: dict[str, typing.Any],
+        field_filter_suffix: str,
+        field_filter_value: typing.Any,
+    ) -> typing.Iterator[typing.Any]:
+        """
+        Runs one NetBox `ipam.ip_addresses.filter(...)` query per configured
+        field in `self.field_name`, applying the same per-field lookup
+        (`<field><field_filter_suffix>=<field_filter_value>`) on top of the
+        shared `base_kwargs`. Results are deduplicated by IP address `id`,
+        preserving first-seen order across fields, so an IP that appears in
+        multiple per-field queries is yielded once.
+
+        This implements an OR-across-fields filter: an IP is fetched if *any*
+        configured field's per-field filter matches.
+
+        Args:
+            base_kwargs: kwargs shared across all per-field queries
+                (e.g. `parent`, `family`, `vrf_id`, `tag`).
+            field_filter_suffix: NetBox lookup suffix (e.g. `"__empty"`, `"__ic"`).
+            field_filter_value: value passed to that lookup (e.g. `"false"`,
+                a zone name).
+
+        Yields:
+            IPAM records, deduplicated by id, in first-seen order across fields.
+        """
+        seen_ids: typing.Set[typing.Any] = set()
+        for field in self.field_name:
+            kwargs = dict(base_kwargs)
+            kwargs[f"{field}{field_filter_suffix}"] = field_filter_value
+            for ipam_record in self._nb_client.ipam.ip_addresses.filter(**kwargs):
+                if ipam_record.id in seen_ids:
+                    continue
+                seen_ids.add(ipam_record.id)
+                yield ipam_record
 
     def _build_forward_records(
         self, zone: Zone, ipam_records: typing.Iterable[typing.Any]
@@ -384,8 +462,8 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         ip_address = ip_interface(ipam_record.address).ip
         record_type: Literal["A", "AAAA"] = "A" if ip_address.version == 4 else "AAAA"
 
-        # Parse out any FQDNs listed in the desired NetBox field
-        fqdns = self._parse_fqdns_list(self._get_field_value(ipam_record))
+        # Union FQDNs across every configured NetBox field (deduped, order-preserving).
+        fqdns = self._collect_fqdns(ipam_record, fields=self.field_name)
 
         # For each FQDN, determine if it belongs to this zone and create records
         for fqdn in fqdns:
@@ -466,29 +544,65 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         ]
         return fqdns[:len_limit] if len_limit else fqdns
 
-    def _get_field_value(self, ipam_record: typing.Any) -> str:
+    def _collect_fqdns(
+        self,
+        ipam_record: typing.Any,
+        fields: typing.List[str],
+        len_limit: typing.Optional[int] = None,
+    ) -> typing.List[str]:
         """
-        Retrieves the value of the configured field from an IPAM record.
+        Collects FQDNs from multiple NetBox fields on a single IPAM record,
+        preserving order and deduplicating across fields.
 
-        Supports both standard fields (e.g., 'dns_name', 'description') and
-        custom fields (prefixed with 'cf_'). Custom fields are accessed via
-        the 'custom_fields' dictionary on the IPAM record.
+        Each listed field is read in order via `_get_field_value` (which handles
+        both standard fields and `cf_`-prefixed custom fields); its value (if
+        non-empty and str-typed) is passed through `_parse_fqdns_list` for
+        per-field comma-splitting and normalization. The results are concatenated
+        and deduplicated, with the first occurrence of each normalized FQDN winning.
+
+        Args:
+            ipam_record: A NetBox IPAM record.
+            fields: Ordered list of field names to consult. Entries prefixed with
+                `cf_` are read from the record's `custom_fields` dictionary.
+            len_limit: If set, truncates the final deduplicated list to this size.
+
+        Returns:
+            List[str]: Deduplicated, order-preserving list of normalized FQDNs.
+        """
+        collected: typing.List[str] = []
+        for field in fields:
+            value = self._get_field_value(ipam_record, field)
+            if not isinstance(value, str) or not value:
+                continue
+            collected.extend(self._parse_fqdns_list(value))
+        deduped = list(dict.fromkeys(collected))
+        return deduped[:len_limit] if len_limit else deduped
+
+    def _get_field_value(self, ipam_record: typing.Any, field: str) -> typing.Any:
+        """
+        Retrieves the raw value of a single field from an IPAM record.
+
+        Supports both standard fields (e.g. `dns_name`, `description`) and
+        custom fields (prefixed with `cf_`). Custom fields are accessed via
+        the `custom_fields` dictionary on the IPAM record, with the `cf_`
+        prefix stripped to obtain the NetBox custom-field key.
 
         Args:
             ipam_record (Any): A single IPAM record from NetBox.
+            field (str): The configured field name (with `cf_` prefix for
+                custom fields).
 
         Returns:
-            str: The field value, or an empty string if the field is not set.
+            Any: The raw field value (typically `str` or `None`). Callers are
+                expected to validate the type before use.
 
         Examples:
-            - field_name='dns_name' -> ipam_record['dns_name']
-            - field_name='cf_additional_dns' -> ipam_record.custom_fields['additional_dns']
+            - `field='dns_name'` -> `ipam_record['dns_name']`
+            - `field='cf_additional_dns'` ->
+              `ipam_record.custom_fields['additional_dns']`
         """
-        if self.field_name.startswith("cf_"):
-            # Custom field: strip 'cf_' prefix and access via custom_fields
-            custom_field_name = self.field_name[3:]
+        if field.startswith("cf_"):
+            custom_field_name = field[3:]
             custom_fields = getattr(ipam_record, "custom_fields", {}) or {}
-            return custom_fields.get(custom_field_name, "") or ""
-        else:
-            # Standard field: access directly
-            return ipam_record[self.field_name] or ""
+            return custom_fields.get(custom_field_name)
+        return ipam_record[field]
