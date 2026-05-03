@@ -92,6 +92,11 @@ def mock_requests():
             json=load_fixture("ip_addresses_subdomain1_example_com.json"),
         )
         mock.get(
+            "http://netbox.example.com/api/ipam/ip-addresses/?dns_name__ic=subdomain1.example.com&limit=0",
+            complete_qs=True,
+            json=load_fixture("ip_addresses_subdomain1_example_com.json"),
+        )
+        mock.get(
             "http://netbox.example.com/api/ipam/ip-addresses/?dns_name__ic=example.com&limit=0",
             complete_qs=True,
             json=load_fixture("ip_addresses_example_com.json"),
@@ -123,17 +128,49 @@ class TestNetboxSourceFailSenarios:
         )
         assert source.url == "http://netbox.example.com"
 
-    def test_init_failed_due_to_invalid_field_name_type(self):
+    def test_init_failed_due_to_invalid_field_name_empty_list(self):
         with pytest.raises(ValidationError) as excinfo:
             NetboxSource(
                 "test",
                 url="http://netbox.example.com/",
                 token="testtoken",
-                field_name=["dns_name", "description"],
+                field_name=[],
             )
 
         assert excinfo.value.errors()[0]["loc"] == ("field_name",)
-        assert excinfo.value.errors()[0]["type"] == "string_type"
+
+    def test_init_failed_due_to_invalid_field_name_empty_string_entry(self):
+        with pytest.raises(ValidationError) as excinfo:
+            NetboxSource(
+                "test",
+                url="http://netbox.example.com/",
+                token="testtoken",
+                field_name=["dns_name", ""],
+            )
+
+        assert excinfo.value.errors()[0]["loc"] == ("field_name",)
+
+    def test_init_failed_due_to_invalid_field_name_non_string_entry(self):
+        with pytest.raises(ValidationError) as excinfo:
+            NetboxSource(
+                "test",
+                url="http://netbox.example.com/",
+                token="testtoken",
+                field_name=["dns_name", 123],
+            )
+
+        assert excinfo.value.errors()[0]["loc"] == ("field_name",)
+
+    def test_init_failed_due_to_invalid_field_name_wrong_type(self):
+        with pytest.raises(ValidationError) as excinfo:
+            NetboxSource(
+                "test",
+                url="http://netbox.example.com/",
+                token="testtoken",
+                field_name=123,
+            )
+
+        assert excinfo.value.errors()[0]["loc"] == ("field_name",)
 
     def test_init_failed_due_to_invalid_ttl_type(self):
         with pytest.raises(ValidationError) as excinfo:
@@ -1129,3 +1166,374 @@ class TestNetboxSourcePopulateNormal:
 
         assert "Skipping subzone record" in caplog.text
         assert len(zone.records) == 6
+
+
+class _FakeIpamRecord:
+    """Minimal stand-in for a pynetbox Record supporting `r[field]` lookups
+    and (optionally) a `custom_fields` dict for `cf_*` field testing."""
+
+    def __init__(self, address: str, fields: dict, custom_fields: dict | None = None):
+        self.address = address
+        self._fields = fields
+        self.custom_fields = custom_fields or {}
+
+    def __getitem__(self, key: str):
+        return self._fields.get(key)
+
+
+class TestNetboxSourceFieldNameList:
+    """Covers the list-form `field_name` capability.
+
+    Unit-level tests for the `_collect_fqdns` helper and filter kwargs;
+    integration-level tests over the existing example.com fixture, which
+    carries both `dns_name` and `description` populated on every record.
+    """
+
+    def _make_source(self, **overrides):
+        defaults = {
+            "url": "http://netbox.example.com/",
+            "token": "testtoken",
+        }
+        defaults.update(overrides)
+        return NetboxSource("test", **defaults)
+
+    # --- Config surface / backcompat ---
+
+    def test_string_form_normalizes_to_single_element_list(self):
+        source = self._make_source(field_name="dns_name")
+        assert source.field_name == ["dns_name"]
+
+    def test_default_is_single_element_list(self):
+        source = self._make_source()
+        assert source.field_name == ["description"]
+
+    def test_list_form_is_preserved(self):
+        source = self._make_source(field_name=["dns_name", "description"])
+        assert source.field_name == ["dns_name", "description"]
+
+    # --- _collect_fqdns helper ---
+
+    def test_collect_fqdns_unions_across_fields(self):
+        source = self._make_source()
+        record = _FakeIpamRecord(
+            "192.0.2.1/24",
+            {
+                "dns_name": "host.example.com.",
+                "description": "alias-a.example.com., alias-b.example.com.",
+            },
+        )
+        result = source._collect_fqdns(record, fields=["dns_name", "description"])
+        assert result == [
+            "host.example.com.",
+            "alias-a.example.com.",
+            "alias-b.example.com.",
+        ]
+
+    def test_collect_fqdns_dedupes_order_preserving(self):
+        source = self._make_source()
+        record = _FakeIpamRecord(
+            "192.0.2.1/24",
+            {
+                "dns_name": "host.example.com.",
+                "description": "host.example.com., alias.example.com.",
+            },
+        )
+        result = source._collect_fqdns(record, fields=["dns_name", "description"])
+        assert result == ["host.example.com.", "alias.example.com."]
+
+    def test_collect_fqdns_skips_empty_fields(self):
+        source = self._make_source()
+        record = _FakeIpamRecord(
+            "192.0.2.1/24",
+            {"dns_name": "", "description": "alias.example.com."},
+        )
+        result = source._collect_fqdns(record, fields=["dns_name", "description"])
+        assert result == ["alias.example.com."]
+
+    def test_collect_fqdns_skips_none_fields(self):
+        source = self._make_source()
+        record = _FakeIpamRecord(
+            "192.0.2.1/24",
+            {"dns_name": None, "description": "alias.example.com."},
+        )
+        result = source._collect_fqdns(record, fields=["dns_name", "description"])
+        assert result == ["alias.example.com."]
+
+    def test_collect_fqdns_len_limit_truncates_after_dedup(self):
+        source = self._make_source()
+        record = _FakeIpamRecord(
+            "192.0.2.1/24",
+            {
+                "dns_name": "host.example.com.",
+                "description": "host.example.com., alias.example.com.",
+            },
+        )
+        result = source._collect_fqdns(
+            record, fields=["dns_name", "description"], len_limit=1
+        )
+        assert result == ["host.example.com."]
+
+    def test_collect_fqdns_first_field_empty_single_field_no_result(self):
+        """Single-valued PTR semantics: empty first field → no FQDN."""
+        source = self._make_source()
+        record = _FakeIpamRecord(
+            "192.0.2.1/24",
+            {"dns_name": "", "description": "alias.example.com."},
+        )
+        result = source._collect_fqdns(record, fields=["dns_name"], len_limit=1)
+        assert result == []
+
+    # --- Filter base kwargs are field-agnostic ---
+
+    def test_ptr_base_filter_kwargs_have_no_field_part(self):
+        """Base PTR kwargs are shared across per-field queries; the per-field
+        `__empty` key is added in `_query_ip_addresses_per_field`, not here."""
+        import ipaddress
+
+        source = self._make_source(field_name=["dns_name", "description"])
+        network = ipaddress.ip_network("192.0.2.0/24")
+        kwargs = source._build_ptr_filter_kwargs(network, family=4)
+        assert not any("__empty" in k for k in kwargs)
+        assert "parent" in kwargs and "family" in kwargs
+
+    def test_forward_base_filter_kwargs_have_no_field_part(self):
+        """Base forward kwargs are shared across per-field queries; the per-field
+        `__ic` key is added in `_query_ip_addresses_per_field`, not here."""
+        source = self._make_source(field_name=["dns_name", "description"])
+        zone = Zone("example.com.", [])
+        kwargs = source._build_forward_filter_kwargs(zone)
+        assert not any("__ic" in k for k in kwargs)
+
+    def test_per_field_query_runs_one_request_per_field(self, mock_requests):
+        """OR-across-fields: configuring [dns_name, description] hits both
+        per-field URLs when populating a forward zone."""
+        zone = Zone("example.com.", [])
+        source = self._make_source(field_name=["dns_name", "description"])
+        source.populate(zone)
+
+        urls = [r.url for r in mock_requests.request_history]
+        assert any("dns_name__ic=example.com" in u for u in urls)
+        assert any("description__ic=example.com" in u for u in urls)
+
+    def test_per_field_query_dedupes_overlapping_ips_by_id(self, mock_requests):
+        """When per-field queries return overlapping IPs (same id), each IP
+        contributes records once. The fixture is identical for both fields,
+        so every IP appears in both queries."""
+        zone = Zone("example.com.", [])
+        source = self._make_source(field_name=["dns_name", "description"])
+        source.populate(zone)
+
+        # Compare counts: with [dns_name, description] vs string-form `description`.
+        # The set of unique IPs is identical (same fixture); union of FQDNs is a
+        # superset of either single field's FQDNs, but no IP is processed twice.
+        zone_string = Zone("example.com.", [])
+        source_string = self._make_source(field_name="description")
+        source_string.populate(zone_string)
+
+        # Every record in the string-form zone (description-only FQDNs)
+        # has a corresponding record in the list-form zone, with no duplicate.
+        list_form_records = list(zone.records)
+        # Ensure no two records share the same (name, type) — that would mean
+        # an IP was processed twice.
+        seen_keys = set()
+        for r in list_form_records:
+            key = (r.name, r._type, tuple(r.values))
+            assert key not in seen_keys, f"duplicate record from dedup miss: {key}"
+            seen_keys.add(key)
+
+    # --- Integration: forward zone with [dns_name, description] ---
+
+    def test_populate_forward_list_form_unions_both_fields(self):
+        """With [dns_name, description], host1 produces records from both fields.
+
+        Fixture record 192.0.4.1 has dns_name=dnsname-host1.example.com
+        and description=description-host1.example.com; both should become A records.
+        """
+        zone = Zone("example.com.", [])
+        source = self._make_source(field_name=["dns_name", "description"])
+        source.populate(zone)
+
+        # Find all A records for 192.0.4.1
+        v4_records = [
+            r for r in zone.records if r._type == "A" and "192.0.4.1" in r.values
+        ]
+        names = {r.name for r in v4_records}
+        assert "dnsname-host1" in names
+        assert "description-host1" in names
+
+    # --- PTR single-valued from first field ---
+
+    def test_populate_ptr_default_single_valued_first_field_only(self):
+        """Default (multivalue_ptr=false) with [dns_name, description] takes dns_name only."""
+        zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
+        source = self._make_source(field_name=["dns_name", "description"])
+        source.populate(zone)
+
+        # First field is dns_name → PTR values should be dnsname-* form, not description-*
+        for r in zone.records:
+            if r._type == "PTR":
+                # Single-valued (default)
+                assert len(r.values) == 1
+                # Value came from dns_name, not description
+                assert "dnsname-" in r.values[0]
+                assert "description-" not in r.values[0]
+
+    # --- PTR fallthrough: empty primary field → next non-empty field ---
+
+    def test_ptr_default_falls_through_empty_first_field(self):
+        """Single-valued PTR with empty primary field falls through to the
+        next-non-empty field's first FQDN (build-level fallthrough)."""
+        zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
+        source = self._make_source(field_name=["dns_name", "description"])
+        fake_record = _FakeIpamRecord(
+            "192.0.2.5/27",
+            {"dns_name": "", "description": "fallback.example.com."},
+        )
+        rrs = source._build_ptr_records(zone, [fake_record])
+        assert len(rrs) == 1
+        assert rrs[0].rdata == "fallback.example.com."
+
+    def test_ptr_default_uses_primary_field_when_populated(self):
+        """When the primary field is populated, the PTR comes from it (no
+        fallthrough), even if a secondary field is also set."""
+        zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
+        source = self._make_source(field_name=["dns_name", "description"])
+        fake_record = _FakeIpamRecord(
+            "192.0.2.5/27",
+            {
+                "dns_name": "primary.example.com.",
+                "description": "alias.example.com.",
+            },
+        )
+        rrs = source._build_ptr_records(zone, [fake_record])
+        assert len(rrs) == 1
+        assert rrs[0].rdata == "primary.example.com."
+
+    # --- PTR multi-valued unions all fields ---
+
+    def test_populate_ptr_multivalue_list_form_unions_all_fields(self):
+        """multivalue_ptr=true with [dns_name, description] unions both fields' FQDNs."""
+        zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
+        source = self._make_source(
+            field_name=["dns_name", "description"], multivalue_ptr=True
+        )
+        source.populate(zone)
+
+        # At least one PTR record should have both a dnsname- and description- value
+        ptr_records = [r for r in zone.records if r._type == "PTR"]
+        assert ptr_records, "expected at least one PTR record"
+        any_multi = any(
+            any("dnsname-" in v for v in r.values)
+            and any("description-" in v for v in r.values)
+            for r in ptr_records
+        )
+        assert any_multi, "expected a PTR record with values from both fields"
+
+    # --- Interaction: populate_subdomains ---
+
+    def test_list_form_respects_populate_subdomains_false(self):
+        """List-form forward union still honors populate_subdomains filtering.
+
+        Uses `description` as the first field so the existing
+        `description__ic=subdomain1.example.com` mock is exercised; the test
+        validates that per-FQDN subdomain gating in `_fqdn_in_zone` is
+        unchanged by the multi-field union path.
+        """
+        zone = Zone("subdomain1.example.com.", [])
+        source = self._make_source(
+            field_name=["description", "dns_name"], populate_subdomains=False
+        )
+        source.populate(zone)
+
+        # Any FQDN with more than one label below the zone name should be dropped
+        for r in zone.records:
+            # r.name is the label below the zone; no dots means one-level-deep
+            assert "." not in r.name
+
+
+class TestNetboxSourceCustomFields:
+    """Covers the `cf_*`-prefixed custom-field capability and its composition
+    with the list-form `field_name`."""
+
+    def _make_source(self, **overrides):
+        defaults = {
+            "url": "http://netbox.example.com/",
+            "token": "testtoken",
+        }
+        defaults.update(overrides)
+        return NetboxSource("test", **defaults)
+
+    def test_get_field_value_standard_field(self):
+        source = self._make_source()
+        record = _FakeIpamRecord(
+            "192.0.2.1/24",
+            {"dns_name": "host.example.com."},
+        )
+        assert source._get_field_value(record, "dns_name") == "host.example.com."
+
+    def test_get_field_value_custom_field_strips_cf_prefix(self):
+        source = self._make_source()
+        record = _FakeIpamRecord(
+            "192.0.2.1/24",
+            {},
+            custom_fields={"aliases": "alias.example.com."},
+        )
+        assert source._get_field_value(record, "cf_aliases") == "alias.example.com."
+
+    def test_get_field_value_custom_field_missing_returns_none(self):
+        source = self._make_source()
+        record = _FakeIpamRecord("192.0.2.1/24", {}, custom_fields={})
+        assert source._get_field_value(record, "cf_missing") is None
+
+    def test_get_field_value_custom_fields_attr_absent(self):
+        """If the IPAM record has no `custom_fields` attribute at all, cf_*
+        lookups return None rather than crashing."""
+
+        class _RecordWithoutCustomFields:
+            def __init__(self):
+                self.address = "192.0.2.1/24"
+
+            def __getitem__(self, key: str):
+                return None
+
+        source = self._make_source()
+        assert source._get_field_value(_RecordWithoutCustomFields(), "cf_x") is None
+
+    def test_collect_fqdns_mixes_standard_and_custom_fields(self):
+        source = self._make_source()
+        record = _FakeIpamRecord(
+            "192.0.2.1/24",
+            {"dns_name": "host.example.com."},
+            custom_fields={"aliases": "alias-a.example.com., alias-b.example.com."},
+        )
+        result = source._collect_fqdns(record, fields=["dns_name", "cf_aliases"])
+        assert result == [
+            "host.example.com.",
+            "alias-a.example.com.",
+            "alias-b.example.com.",
+        ]
+
+    def test_collect_fqdns_cf_only(self):
+        source = self._make_source()
+        record = _FakeIpamRecord(
+            "192.0.2.1/24",
+            {},
+            custom_fields={"aliases": "a.example.com., b.example.com."},
+        )
+        result = source._collect_fqdns(record, fields=["cf_aliases"])
+        assert result == ["a.example.com.", "b.example.com."]
+
+    def test_collect_fqdns_cf_dedupes_against_standard(self):
+        source = self._make_source()
+        record = _FakeIpamRecord(
+            "192.0.2.1/24",
+            {"dns_name": "host.example.com."},
+            custom_fields={"aliases": "host.example.com., other.example.com."},
+        )
+        result = source._collect_fqdns(record, fields=["dns_name", "cf_aliases"])
+        assert result == ["host.example.com.", "other.example.com."]
+
+    def test_string_form_cf_field_normalizes_to_list(self):
+        """Backcompat: a bare `cf_*` string is normalized to a one-element list."""
+        source = self._make_source(field_name="cf_aliases")
+        assert source.field_name == ["cf_aliases"]
