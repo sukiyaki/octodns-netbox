@@ -7,7 +7,7 @@ as tests/fixtures/<case>.json for the unit tests.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import seed
 
@@ -20,13 +20,13 @@ TAG_ZONES = ("example.org.", "5.0.192.in-addr.arpa.")
 @dataclass(frozen=True)
 class Case:
     name: str
-    zones: Tuple[str, ...]
-    settings: Dict[str, Any] = field(default_factory=dict)
+    zones: tuple[str, ...]
+    settings: dict[str, Any] = field(default_factory=dict)
     # Text of the ValueError the source must raise while the config loads.
-    init_error: Optional[str] = None
+    init_error: str | None = None
 
 
-def cases(vrf_ids: Dict[str, int]) -> List[Case]:
+def cases(vrf_ids: dict[str, int]) -> list[Case]:
     mgmt = vrf_ids[seed.MGMT_VRF]
     return [
         Case(

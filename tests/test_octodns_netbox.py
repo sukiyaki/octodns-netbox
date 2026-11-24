@@ -218,11 +218,11 @@ def test_populate_returns_the_zones_the_live_run_dumps(name):
 def test_init_fails_when_populate_vrf_name_is_not_in_netbox():
     case = load_case("vrf-name-not-found")
     assert [e["response"]["json"]["count"] for e in case["init"]] == [0]
-    with replaying(case["init"]):
-        with pytest.raises(
-            ValueError, match="Failed to retrieve VRF information by name"
-        ):
-            NetboxSource("netbox", token="not-recorded", **case["source"])
+    with (
+        replaying(case["init"]),
+        pytest.raises(ValueError, match="Failed to retrieve VRF information by name"),
+    ):
+        NetboxSource("netbox", token="not-recorded", **case["source"])
 
 
 def test_populate_warns_about_records_inside_a_configured_subzone(caplog):

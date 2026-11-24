@@ -1,11 +1,10 @@
 import ipaddress
 import re
-from typing import Union
 
 from octodns.zone import Zone
 
 
-def to_network(zone: Zone) -> Union[ipaddress.IPv4Network, ipaddress.IPv6Network]:
+def to_network(zone: Zone) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
     """
     Convert a reverse DNS zone (either in-addr.arpa for IPv4 or ip6.arpa for IPv6)
     into its corresponding IPv4Network or IPv6Network object.
@@ -125,7 +124,7 @@ def to_network_v6(zone: Zone) -> ipaddress.IPv6Network:
 
 
 def from_address(
-    zone: Zone, ip_address: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+    zone: Zone, ip_address: ipaddress.IPv4Address | ipaddress.IPv6Address
 ) -> str:
     """
     Given a reverse zone and an IP address, construct the full reverse pointer (FQDN) string,

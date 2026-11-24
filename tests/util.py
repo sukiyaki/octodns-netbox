@@ -1,7 +1,6 @@
-class SimpleProvider(object):
+class SimpleProvider:
     SUPPORTS_GEO = False
     SUPPORTS_DYNAMIC = False
-    SUPPORTS = set(("A", "AAAA", "PTR"))
     id = "test"
 
     def __init__(self, id="test"):

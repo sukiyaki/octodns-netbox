@@ -12,11 +12,11 @@ classifiers = [
   'License :: OSI Approved :: MIT License',
   'Natural Language :: English',
   'Programming Language :: Python :: 3',
-  'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
   'Programming Language :: Python :: 3.12',
   'Programming Language :: Python :: 3.13',
-  'Programming Language :: Python :: 3.14'
+  'Programming Language :: Python :: 3.14',
+  'Programming Language :: Python :: 3.15'
 ]
 dependencies = [
   "octodns>=1.10.0,<2.0.0",
@@ -29,7 +29,7 @@ dynamic = ["version"]
 license = "MIT"
 name = "octodns-netbox"
 readme = "README.md"
-requires-python = ">=3.10,<4"
+requires-python = ">=3.11,<4"
 
 [project.urls]
 Homepage = "https://github.com/sukiyaki/octodns-netbox"
@@ -61,6 +61,17 @@ local_scheme = "no-local-version"
 [tool.pytest.ini_options]
 addopts = ["--cov", "--cov-report=term-missing"]
 testpaths = ["tests"]
+
+[tool.ruff]
+# tests/live/run.py imports cases, record, and seed from its own directory.
+src = [".", "tests/live"]
+target-version = "py311"
+
+[tool.ruff.lint]
+# Ruff 0.15's default rules (E4, E7, E9, F), import sorting, pyupgrade, and the
+# rules ruff 0.17's wider default reported on this code. Listing them keeps a
+# ruff upgrade from changing what is checked.
+select = ["E4", "E7", "E9", "F", "I", "UP", "BLE001", "C405", "RUF012", "SIM117"]
 
 [tool.uv]
 # uv build installs the build backend in a separate environment, which

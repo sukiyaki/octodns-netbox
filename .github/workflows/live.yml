@@ -23,27 +23,27 @@ jobs:
         include:
         - row: netbox-4.0-token-v1
           netbox: '4.0'
-          python: '3.14'
+          python: '3.15'
           token: 1
           lowest: false
         - row: netbox-4.0-token-v1-lowest
           netbox: '4.0'
-          python: '3.10'
+          python: '3.11'
           token: 1
           lowest: true
         - row: netbox-4.7-token-v1
           netbox: '4.7'
-          python: '3.10'
+          python: '3.11'
           token: 1
           lowest: false
         - row: netbox-4.7-token-v2
           netbox: '4.7'
-          python: '3.14'
+          python: '3.15'
           token: 2
           lowest: false
         - row: netbox-4.7-token-v2-lowest
           netbox: '4.7'
-          python: '3.10'
+          python: '3.11'
           token: 2
           lowest: true
     steps:

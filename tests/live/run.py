@@ -55,9 +55,10 @@ import sys
 import tempfile
 import time
 import traceback
+from collections.abc import Iterator
 from importlib import metadata
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any
 
 import yaml
 from octodns.manager import Manager
@@ -79,7 +80,7 @@ LOCK = "run.lock"
 USERNAME, PASSWORD = "admin", "admin-password"
 
 
-def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -154,7 +155,7 @@ class Stack:
         self._run("down", "--volumes", "--remove-orphans")
 
 
-def source_config(case: cases.Case) -> Dict[str, Any]:
+def source_config(case: cases.Case) -> dict[str, Any]:
     return {
         "class": "octodns_netbox.NetboxSource",
         "url": "env/NETBOX_URL",
@@ -163,7 +164,7 @@ def source_config(case: cases.Case) -> Dict[str, Any]:
     }
 
 
-def recorded_settings(case: cases.Case) -> Dict[str, Any]:
+def recorded_settings(case: cases.Case) -> dict[str, Any]:
     """The source settings as the unit tests pass them: no class, no token."""
     return {
         key: os.environ[value[4:]]
@@ -186,7 +187,7 @@ def write_config(case: cases.Case, path: Path) -> None:
 def dump(case: cases.Case, zones_dir: Path, config_path: Path) -> record.Recording:
     """Dump every zone of `case`, recording the HTTP exchanges at init and per zone."""
     write_config(case, config_path)
-    sent: Dict[str, List[record.Exchange]] = {"init": []}
+    sent: dict[str, list[record.Exchange]] = {"init": []}
     with record.recording(sent["init"]):
         try:
             manager = Manager(str(config_path))
@@ -211,7 +212,7 @@ def dump(case: cases.Case, zones_dir: Path, config_path: Path) -> record.Recordi
     return record.Recording(sent, sub_zones)
 
 
-def tree_files(root: Path, pattern: str) -> Dict[str, List[str]]:
+def tree_files(root: Path, pattern: str) -> dict[str, list[str]]:
     if not root.is_dir():
         return {}
     return {
@@ -220,13 +221,13 @@ def tree_files(root: Path, pattern: str) -> Dict[str, List[str]]:
     }
 
 
-def compare(expected_dir: Path, actual_dir: Path, pattern: str) -> Optional[List[str]]:
+def compare(expected_dir: Path, actual_dir: Path, pattern: str) -> list[str] | None:
     """Unified diff of the two trees, or None when expected_dir has no such files."""
     expected = tree_files(expected_dir, pattern)
     if not expected:
         return None
     actual = tree_files(actual_dir, pattern)
-    diff: List[str] = []
+    diff: list[str] = []
     for name in sorted(expected.keys() | actual.keys()):
         diff += difflib.unified_diff(
             expected.get(name, []),
@@ -237,7 +238,7 @@ def compare(expected_dir: Path, actual_dir: Path, pattern: str) -> Optional[List
     return diff
 
 
-def measure_full_dumps(netbox: seed.NetBox, ip_count: int, runs: int) -> Dict[str, Any]:
+def measure_full_dumps(netbox: seed.NetBox, ip_count: int, runs: int) -> dict[str, Any]:
     seed.seed_perf(netbox, ip_count)
     seconds = []
     for attempt in range(runs):
@@ -264,7 +265,7 @@ def measure_full_dumps(netbox: seed.NetBox, ip_count: int, runs: int) -> Dict[st
     }
 
 
-def _request_counts(sent: Dict[str, List[record.Exchange]]) -> Dict[str, Any]:
+def _request_counts(sent: dict[str, list[record.Exchange]]) -> dict[str, Any]:
     counts = {}
     for step, exchanges in sent.items():
         lines = [f"{request.method} {request.path_url}" for request, _ in exchanges]
@@ -273,7 +274,7 @@ def _request_counts(sent: Dict[str, List[record.Exchange]]) -> Dict[str, Any]:
 
 
 def check_fixtures(
-    args: argparse.Namespace, out: Path, fixtures: Dict[str, Dict[str, Any]]
+    args: argparse.Namespace, out: Path, fixtures: dict[str, dict[str, Any]]
 ) -> str:
     """Record or compare the fixtures. Returns the "fixtures" entry of run.json."""
     record.write(fixtures, out / "fixtures")
@@ -323,7 +324,7 @@ def _write_json(path: Path, data: Any) -> None:
 
 
 @contextlib.contextmanager
-def _timed(durations: Dict[str, float], step: str) -> Iterator[None]:
+def _timed(durations: dict[str, float], step: str) -> Iterator[None]:
     start = time.perf_counter()
     try:
         yield
@@ -387,9 +388,9 @@ def check_netbox(
     args: argparse.Namespace,
     out: Path,
     stack: Stack,
-    run: Dict[str, Any],
-    durations: Dict[str, float],
-) -> Tuple[int, str]:
+    run: dict[str, Any],
+    durations: dict[str, float],
+) -> tuple[int, str]:
     """Start NetBox, dump and compare every case. Returns the status and result."""
     with _timed(durations, "startup"):
         url = stack.up()
@@ -437,7 +438,7 @@ def check_netbox(
         status = 1
         result = "fixtures-differ" if result == "matches" else result
 
-    perf: Dict[str, Any] = {"requests_per_zone_populate": sent}
+    perf: dict[str, Any] = {"requests_per_zone_populate": sent}
     if args.perf_runs:
         with _timed(durations, "perf"):
             perf["full_dump"] = measure_full_dumps(
@@ -447,7 +448,7 @@ def check_netbox(
     return status, result
 
 
-def remove_stack(stack: Stack, out: Path, run: Dict[str, Any]) -> bool:
+def remove_stack(stack: Stack, out: Path, run: dict[str, Any]) -> bool:
     """Save the NetBox log, then remove the stack. Returns False if removing fails.
 
     The removal runs also when saving the log fails or is interrupted.
@@ -469,7 +470,7 @@ def remove_stack(stack: Stack, out: Path, run: Dict[str, Any]) -> bool:
     return removed
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     out: Path = args.output_dir or new_output_dir(args)
     with claimed(out):
@@ -477,8 +478,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Writing to {out}", flush=True)
         _configure_logging(out / "octodns.log")
 
-        durations: Dict[str, float] = {}
-        run: Dict[str, Any] = {
+        durations: dict[str, float] = {}
+        run: dict[str, Any] = {
             "netbox": args.netbox,
             "image_tag": IMAGE_TAGS[args.netbox],
             "token_version": args.token_version,

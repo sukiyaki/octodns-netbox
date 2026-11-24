@@ -9,7 +9,6 @@ import logging
 import re
 import typing
 from ipaddress import ip_interface
-
 from typing import Annotated, Literal
 
 import pynetbox
@@ -54,19 +53,17 @@ class NetboxSourceConfig(BaseModel):
         description="Whether dynamic records are supported.",
     )
     SUPPORTS_GEO: bool = False
-    SUPPORTS: typing.Set[str] = set(("A", "AAAA", "PTR"))
+    SUPPORTS: set[str] = {"A", "AAAA", "PTR"}
 
     id: str
     url: Url
     token: str
     field_name: str = "description"
-    populate_tags: typing.List[str] = []
+    populate_tags: list[str] = []
     populate_vrf_id: Annotated[
-        typing.Union[int, Literal["null"], None], Field(validate_default=True)
+        int | Literal["null"] | None, Field(validate_default=True)
     ] = None
-    populate_vrf_name: Annotated[typing.Optional[str], Field(validate_default=True)] = (
-        None
-    )
+    populate_vrf_name: Annotated[str | None, Field(validate_default=True)] = None
     populate_subdomains: bool = True
     ttl: int = 60
     ssl_verify: bool = True
@@ -88,9 +85,7 @@ class NetboxSourceConfig(BaseModel):
         return v
 
     @field_validator("populate_vrf_name")
-    def validate_vrf_name(
-        cls, v: typing.Optional[str], info: ValidationInfo
-    ) -> typing.Optional[str]:
+    def validate_vrf_name(cls, v: str | None, info: ValidationInfo) -> str | None:
         """
         Ensures that populate_vrf_name and populate_vrf_id
         are not set simultaneously.
@@ -227,9 +222,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             "Populated %s new records in zone %s", len(zone.records) - before, zone.name
         )
 
-    def _populate_ptr_records(
-        self, zone: Zone, family: Literal[4, 6]
-    ) -> typing.List[Rr]:
+    def _populate_ptr_records(self, zone: Zone, family: Literal[4, 6]) -> list[Rr]:
         """
         Populates PTR records for a reverse zone (in-addr.arpa or ip6.arpa).
 
@@ -280,7 +273,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         self,
         zone: Zone,
         ipam_records: typing.Iterable[typing.Any],
-    ) -> typing.List[Rr]:
+    ) -> list[Rr]:
         """
         Builds PTR Rr objects from NetBox IPAM records.
 
@@ -291,7 +284,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         Returns:
             List[Rr]: A list of PTR record objects to be added to the zone.
         """
-        records: typing.List[Rr] = []
+        records: list[Rr] = []
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
             ptr_name = zone.hostname_from_fqdn(
@@ -308,7 +301,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
                 records.append(rr)
         return records
 
-    def _populate_forward_records(self, zone: Zone) -> typing.List[Rr]:
+    def _populate_forward_records(self, zone: Zone) -> list[Rr]:
         """
         Populates A/AAAA records for a forward zone.
 
@@ -345,7 +338,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
 
     def _build_forward_records(
         self, zone: Zone, ipam_records: typing.Iterable[typing.Any]
-    ) -> typing.List[Rr]:
+    ) -> list[Rr]:
         """
         Creates A/AAAA Rr objects from NetBox IP address records for the given zone.
 
@@ -356,7 +349,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         Returns:
             List[Rr]: A list of forward record objects to be added to the zone.
         """
-        records: typing.List[Rr] = []
+        records: list[Rr] = []
         for ipam_record in ipam_records:
             # Delegate the per-record processing to a helper method
             new_records = self._build_records_for_ipam_record(zone, ipam_record)
@@ -366,7 +359,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
 
     def _build_records_for_ipam_record(
         self, zone: Zone, ipam_record: typing.Any
-    ) -> typing.List[Rr]:
+    ) -> list[Rr]:
         """
         Converts a single NetBox IPAM record into one or more octoDNS record objects.
 
@@ -378,7 +371,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             List[Rr]: A list of forward (A/AAAA) record objects corresponding
                     to the provided IPAM record.
         """
-        records: typing.List[Rr] = []
+        records: list[Rr] = []
 
         # Derive IP address and record type
         ip_address = ip_interface(ipam_record.address).ip
@@ -427,9 +420,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
 
         return False
 
-    def _add_records_to_zone(
-        self, zone: Zone, rrs: typing.List[Rr], lenient: bool
-    ) -> None:
+    def _add_records_to_zone(self, zone: Zone, rrs: list[Rr], lenient: bool) -> None:
         """
         Adds Rr objects to the given zone, respecting lenient mode
         and subzone exceptions.
@@ -446,8 +437,8 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
                 self.log.warning(f"Skipping subzone record: {record}")
 
     def _parse_fqdns_list(
-        self, field_value: str, len_limit: typing.Optional[int] = None
-    ) -> typing.List[str]:
+        self, field_value: str, len_limit: int | None = None
+    ) -> list[str]:
         """
         Parses a string containing one or more comma-separated FQDNs into a list.
         Ensures each FQDN ends with a trailing period.

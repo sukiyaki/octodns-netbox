@@ -6,8 +6,9 @@ tests/fixtures/ are recorded from this data.
 """
 
 import ipaddress
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any
 
 import requests
 
@@ -25,8 +26,8 @@ class Ip:
     address: str
     description: str = ""
     dns_name: str = ""
-    vrf: Optional[str] = None
-    tags: Tuple[str, ...] = ()
+    vrf: str | None = None
+    tags: tuple[str, ...] = ()
 
 
 IPS = (
@@ -211,7 +212,7 @@ def auth_header(token: str, version: int) -> str:
     return f"{'Bearer' if version == 2 else 'Token'} {token}"
 
 
-def seed(netbox: NetBox) -> Dict[str, int]:
+def seed(netbox: NetBox) -> dict[str, int]:
     """Create the VRF, tags and addresses. Returns VRF IDs by name."""
     vrf = netbox.post("ipam/vrfs/", {"name": MGMT_VRF})
     netbox.post("extras/tags/", [{"name": tag, "slug": tag} for tag in TAGS])
@@ -242,7 +243,7 @@ def seed_perf(netbox: NetBox, count: int) -> None:
         netbox.post("ipam/ip-addresses/", chunk)
 
 
-def _chunks(items: List[Any], size: int) -> Iterator[List[Any]]:
+def _chunks(items: list[Any], size: int) -> Iterator[list[Any]]:
     for start in range(0, len(items), size):
         yield items[start : start + size]
 

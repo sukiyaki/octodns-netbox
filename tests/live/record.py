@@ -13,8 +13,9 @@ from this directory. normalize() is the only change made to what NetBox sent.
 
 import contextlib
 import json
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, NamedTuple, Tuple
+from typing import Any, NamedTuple
 from unittest import mock
 
 import requests
@@ -22,18 +23,18 @@ import requests
 FIXTURE_URL = "http://netbox.example.com"
 FIXTURE_TIMESTAMP = "2000-01-01T00:00:00.000000Z"
 
-Exchange = Tuple[requests.PreparedRequest, requests.Response]
+Exchange = tuple[requests.PreparedRequest, requests.Response]
 
 
 class Recording(NamedTuple):
     """The HTTP exchanges of one case's dump."""
 
-    sent: Dict[str, List[Exchange]]  # "init", then each dumped zone
-    sub_zones: Dict[str, List[str]]  # what octoDNS passed to each Zone
+    sent: dict[str, list[Exchange]]  # "init", then each dumped zone
+    sub_zones: dict[str, list[str]]  # what octoDNS passed to each Zone
 
 
 @contextlib.contextmanager
-def recording(into: List[Exchange]) -> Iterator[None]:
+def recording(into: list[Exchange]) -> Iterator[None]:
     """Append (request, response) for every HTTP request sent inside the block."""
     send = requests.Session.send
 
@@ -47,8 +48,8 @@ def recording(into: List[Exchange]) -> Iterator[None]:
 
 
 def fixture(
-    recorded: Recording, source: Dict[str, Any], live_url: str
-) -> Dict[str, Any]:
+    recorded: Recording, source: dict[str, Any], live_url: str
+) -> dict[str, Any]:
     zones = {
         zone: {
             "sub_zones": sub_zones,
@@ -86,7 +87,7 @@ def normalize(value: Any, live_url: str) -> Any:
     return value
 
 
-def write(fixtures: Dict[str, Dict[str, Any]], directory: Path) -> None:
+def write(fixtures: dict[str, dict[str, Any]], directory: Path) -> None:
     """Replace the fixtures in `directory` with one file per case."""
     directory.mkdir(parents=True, exist_ok=True)
     for stale in directory.glob("*.json"):
@@ -97,7 +98,7 @@ def write(fixtures: Dict[str, Dict[str, Any]], directory: Path) -> None:
 
 def _exchange(
     request: requests.PreparedRequest, response: requests.Response
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "request": {"method": request.method, "url": request.url},
         "response": {"status": response.status_code, "json": response.json()},

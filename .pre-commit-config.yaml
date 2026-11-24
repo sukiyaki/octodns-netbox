@@ -15,15 +15,15 @@ repos:
   - id: mixed-line-ending
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
-  rev: v0.15.12
+  rev: v0.17.6
   hooks:
     # Run the linter.
-  - id: ruff
+  - id: ruff-check
     args: [--fix]
     # Run the formatter.
   - id: ruff-format
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v1.20.2
+  rev: v2.4.1
   hooks:
   - id: mypy
     files: octodns_netbox
