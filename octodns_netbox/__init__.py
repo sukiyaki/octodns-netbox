@@ -8,12 +8,13 @@ based on a NetBox API.
 import logging
 import re
 import typing
+from collections import defaultdict
 from ipaddress import ip_interface
-from typing import Annotated, Literal
+from typing import Annotated, Literal, NamedTuple
 
 import pynetbox
 import requests
-from octodns.record import Record, Rr
+from octodns.record import Record
 from octodns.source.base import BaseSource
 from octodns.zone import SubzoneRecordException, Zone
 from pydantic import (
@@ -29,11 +30,47 @@ from pydantic import (
 
 import octodns_netbox.reversename
 
+try:
+    from octodns.record import Rrset
+except ImportError:  # pragma: no-cover-with-rrset
+    # octoDNS before 1.22 has no Rrset. Its Rr holds one value.
+    from octodns.record import Rr
+
+    def _octodns_records(
+        zone: Zone, rdatas: dict[tuple[str, str], list[str]], ttl: int, lenient: bool
+    ) -> list[typing.Any]:
+        rrs = [
+            Rr(owner, _type, ttl, rdata)
+            for (owner, _type), values in rdatas.items()
+            for rdata in values
+        ]
+        return Record.from_rrs(zone, rrs, lenient=lenient)
+
+else:  # pragma: no-cover-without-rrset
+
+    def _octodns_records(
+        zone: Zone, rdatas: dict[tuple[str, str], list[str]], ttl: int, lenient: bool
+    ) -> list[typing.Any]:
+        rrsets = [
+            Rrset(owner, _type, ttl, values)
+            for (owner, _type), values in rdatas.items()
+        ]
+        return Record.from_rrsets(zone, rrsets, lenient=lenient)
+
+
 # Type alias for URL validation
 Url = Annotated[
     str,
     BeforeValidator(lambda value: str(TypeAdapter(AnyHttpUrl).validate_python(value))),
 ]
+
+
+class ResourceRecord(NamedTuple):
+    """One value of a record. The source groups them by owner and type."""
+
+    owner: str  # relative to the zone
+    type: str
+    rdata: str
 
 
 class NetboxSourceConfig(BaseModel):
@@ -222,7 +259,9 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             "Populated %s new records in zone %s", len(zone.records) - before, zone.name
         )
 
-    def _populate_ptr_records(self, zone: Zone, family: Literal[4, 6]) -> list[Rr]:
+    def _populate_ptr_records(
+        self, zone: Zone, family: Literal[4, 6]
+    ) -> list[ResourceRecord]:
         """
         Populates PTR records for a reverse zone (in-addr.arpa or ip6.arpa).
 
@@ -231,7 +270,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             family (Literal[4, 6]): IP family (4 for IPv4, 6 for IPv6).
 
         Returns:
-            List[Rr]: A list of Rr objects for PTR records.
+            list[ResourceRecord]: The PTR records.
         """
         network = octodns_netbox.reversename.to_network(zone)
         filter_kwargs = self._build_ptr_filter_kwargs(network, family)
@@ -273,18 +312,18 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         self,
         zone: Zone,
         ipam_records: typing.Iterable[typing.Any],
-    ) -> list[Rr]:
+    ) -> list[ResourceRecord]:
         """
-        Builds PTR Rr objects from NetBox IPAM records.
+        Builds PTR records from NetBox IPAM records.
 
         Args:
             zone (Zone): The reverse zone being populated.
             ipam_records (Iterable[Any]): IPAM records returned by NetBox filter query.
 
         Returns:
-            List[Rr]: A list of PTR record objects to be added to the zone.
+            list[ResourceRecord]: The PTR records to add to the zone.
         """
-        records: list[Rr] = []
+        records: list[ResourceRecord] = []
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
             ptr_name = zone.hostname_from_fqdn(
@@ -296,12 +335,12 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
                 len_limit=None if self.multivalue_ptr else 1,
             )
             for fqdn in fqdns:
-                rr = Rr(ptr_name, "PTR", self.ttl, fqdn)
+                rr = ResourceRecord(ptr_name, "PTR", fqdn)
                 self.log.debug(f"Adding PTR record {rr} to zone {zone.name}")
                 records.append(rr)
         return records
 
-    def _populate_forward_records(self, zone: Zone) -> list[Rr]:
+    def _populate_forward_records(self, zone: Zone) -> list[ResourceRecord]:
         """
         Populates A/AAAA records for a forward zone.
 
@@ -309,7 +348,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             zone (Zone): The forward zone to populate.
 
         Returns:
-            List[Rr]: A list of Rr objects for A/AAAA records.
+            list[ResourceRecord]: The A and AAAA records.
         """
         filter_kwargs = self._build_forward_filter_kwargs(zone)
         ipam_records = self._nb_client.ipam.ip_addresses.filter(**filter_kwargs)
@@ -338,18 +377,18 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
 
     def _build_forward_records(
         self, zone: Zone, ipam_records: typing.Iterable[typing.Any]
-    ) -> list[Rr]:
+    ) -> list[ResourceRecord]:
         """
-        Creates A/AAAA Rr objects from NetBox IP address records for the given zone.
+        Creates A/AAAA records from NetBox IP address records for the given zone.
 
         Args:
             zone (Zone): The forward zone being populated.
             ipam_records (Iterable[Any]): IPAM records returned by NetBox filter query.
 
         Returns:
-            List[Rr]: A list of forward record objects to be added to the zone.
+            list[ResourceRecord]: The forward records to add to the zone.
         """
-        records: list[Rr] = []
+        records: list[ResourceRecord] = []
         for ipam_record in ipam_records:
             # Delegate the per-record processing to a helper method
             new_records = self._build_records_for_ipam_record(zone, ipam_record)
@@ -359,7 +398,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
 
     def _build_records_for_ipam_record(
         self, zone: Zone, ipam_record: typing.Any
-    ) -> list[Rr]:
+    ) -> list[ResourceRecord]:
         """
         Converts a single NetBox IPAM record into one or more octoDNS record objects.
 
@@ -368,10 +407,9 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             ipam_record (Any): A single IPAM record from NetBox.
 
         Returns:
-            List[Rr]: A list of forward (A/AAAA) record objects corresponding
-                    to the provided IPAM record.
+            list[ResourceRecord]: The A or AAAA records for the IPAM record.
         """
-        records: list[Rr] = []
+        records: list[ResourceRecord] = []
 
         # Derive IP address and record type
         ip_address = ip_interface(ipam_record.address).ip
@@ -387,7 +425,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
                 continue
 
             name = zone.hostname_from_fqdn(fqdn)
-            rr = Rr(name, record_type, self.ttl, ip_address.compressed)
+            rr = ResourceRecord(name, record_type, ip_address.compressed)
             self.log.debug(f"Created {record_type} record {rr} for zone {zone.name}")
             records.append(rr)
 
@@ -420,17 +458,23 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
 
         return False
 
-    def _add_records_to_zone(self, zone: Zone, rrs: list[Rr], lenient: bool) -> None:
+    def _add_records_to_zone(
+        self, zone: Zone, rrs: list[ResourceRecord], lenient: bool
+    ) -> None:
         """
-        Adds Rr objects to the given zone, respecting lenient mode
-        and subzone exceptions.
+        Groups the records by owner and type and adds them to the given
+        zone, respecting lenient mode and subzone exceptions.
 
         Args:
             zone (Zone): The zone to which records will be added.
-            rrs (List[Rr]): A list of Rr objects.
+            rrs (list[ResourceRecord]): The records, in the order NetBox
+                returned their addresses.
             lenient (bool): If True, subzone exceptions will not raise an error.
         """
-        for record in Record.from_rrs(zone, rrs, lenient=lenient):
+        rdatas: dict[tuple[str, str], list[str]] = defaultdict(list)
+        for rr in rrs:
+            rdatas[(rr.owner, rr.type)].append(rr.rdata)
+        for record in _octodns_records(zone, rdatas, self.ttl, lenient):
             try:
                 zone.add_record(record, lenient=lenient)
             except SubzoneRecordException:
