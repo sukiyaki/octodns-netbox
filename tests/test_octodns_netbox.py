@@ -328,3 +328,11 @@ def test_populate_lower_cases_each_name_as_a_whole_as_0_5_0_did():
     assert ptr == {
         (f"{address[name].reverse_pointer}.", fqdn) for name, fqdn in IDN_CASE
     }
+
+
+def test_populate_fails_on_an_ipv6_zone_label_that_is_not_one_hex_digit():
+    # The autouse mocker fails any request, so this also shows that the source
+    # stops before it asks NetBox anything.
+    source = NetboxSource("netbox", url="http://netbox.example.com", token="t")
+    with pytest.raises(ValueError, match="'00' must be one hex digit"):
+        source.populate(Zone("00.ip6.arpa.", []))

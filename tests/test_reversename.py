@@ -65,6 +65,14 @@ class TestToNetworkIPv6:
         zone_64 = Zone("0.0.0.0.c.d.b.a.8.b.d.0.1.0.0.2.ip6.arpa.", [])
         assert to_network(zone_64) == ipaddress.IPv6Network("2001:db8:abdc::/64")
 
+    @pytest.mark.parametrize(
+        "name",
+        ["00.ip6.arpa.", "0.00.ip6.arpa.", "db8.1.0.0.2.ip6.arpa.", "g.ip6.arpa."],
+    )
+    def test_to_network_ipv6_fails_on_a_label_that_is_not_one_hex_digit(self, name):
+        with pytest.raises(ValueError, match="must be one hex digit"):
+            to_network(Zone(name, []))
+
 
 class TestFromAddressIPv4:
     def test_from_address_ipv4_non_octet_boundary(self):
@@ -152,10 +160,10 @@ class TestFromAddressIPv6:
             == "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa."
         )
 
-    def test_from_address_ipv6_zone_with_a_two_digit_label_is_the_apex(self):
-        # Pins the behavior of 0.5.0. "00" is no nibble, so no name is right.
-        zone = Zone("00.ip6.arpa.", [])
-        assert from_address(zone, ipaddress.IPv6Address("::1")) == "00.ip6.arpa."
+    def test_from_address_ipv6_fails_for_an_address_outside_the_zone(self):
+        zone = Zone("8.b.d.0.1.0.0.2.ip6.arpa.", [])
+        with pytest.raises(ValueError, match="not in zone"):
+            from_address(zone, ipaddress.IPv6Address("2001:db9::1"))
 
     def test_from_address_ipv6_fails_due_to_invalid_zone(self):
         zone_invalid_1 = Zone(

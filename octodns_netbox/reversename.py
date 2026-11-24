@@ -11,6 +11,8 @@ _IPV6_SUFFIX = ".ip6.arpa."
 _IPV4_FIRST_LABEL = re.compile(
     r"^(?P<octet>25[0-5]|2[0-4]\d|[01]?\d?\d)([/-](?P<prefixlen>2[5-9]|3[0-1]))?$"
 )
+# Each label of an IPv6 reverse zone is one hex digit (RFC 3596).
+_IPV6_LABEL = re.compile(r"^[0-9a-fA-F]$")
 
 
 def is_reverse(zone: Zone) -> bool:
@@ -46,6 +48,12 @@ def to_network_v4(zone: Zone) -> ipaddress.IPv4Network:
 
 def to_network_v6(zone: Zone) -> ipaddress.IPv6Network:
     labels = zone.name.removesuffix(_IPV6_SUFFIX).split(".")
+    for label in labels:
+        if not _IPV6_LABEL.match(label):
+            raise ValueError(
+                f"Invalid reverse zone '{zone.name}'. Each label before "
+                f"'.ip6.arpa.' is one nibble, so '{label}' must be one hex digit."
+            )
     nibbles = "".join(reversed(labels))
     hextets = [nibbles[i : i + 4].ljust(4, "0") for i in range(0, len(nibbles), 4)]
     return ipaddress.IPv6Network(f"{':'.join(hextets)}::/{4 * len(labels)}")
@@ -73,6 +81,4 @@ def from_address(
     if zone.name.endswith(_IPV4_SUFFIX):
         host_octet = pointer.split(".")[0]
         return f"{host_octet}.{zone.name}"
-    # An IPv6 zone with a label of two or more digits, such as "00.ip6.arpa.",
-    # has no PTR names. Its addresses stay at the apex, as in 0.5.0.
-    return cast(str, zone.name)
+    raise ValueError(f"{address} is not in zone '{zone.name}'.")
