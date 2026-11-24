@@ -10,7 +10,7 @@ import re
 from collections import defaultdict
 from collections.abc import Iterable
 from ipaddress import ip_interface
-from typing import Any, Literal, NamedTuple
+from typing import Any, Literal, NamedTuple, cast
 
 import pynetbox
 import requests
@@ -42,7 +42,7 @@ except ImportError:  # pragma: no-cover-with-rrset
             for (owner, _type), values in rdatas.items()
             for rdata in values
         ]
-        return Record.from_rrs(zone, rrs, lenient=lenient)
+        return cast(list[Any], Record.from_rrs(zone, rrs, lenient=lenient))
 
 else:  # pragma: no-cover-without-rrset
 
@@ -53,7 +53,7 @@ else:  # pragma: no-cover-without-rrset
             Rrset(owner, _type, ttl, values)
             for (owner, _type), values in rdatas.items()
         ]
-        return Record.from_rrsets(zone, rrsets, lenient=lenient)
+        return cast(list[Any], Record.from_rrsets(zone, rrsets, lenient=lenient))
 
 
 # The IP addresses a source reads: those in every VRF (None), those without
@@ -105,7 +105,8 @@ class NetboxSourceConfig(BaseModel):
         return value
 
 
-class NetboxSource(BaseSource):
+# octoDNS has no type information, so BaseSource is Any to mypy.
+class NetboxSource(BaseSource):  # type: ignore[misc]
     """Creates A, AAAA, and PTR records from the IP addresses in NetBox."""
 
     SUPPORTS_GEO = False
@@ -120,8 +121,11 @@ class NetboxSource(BaseSource):
                 self.log.warning("Unknown setting %s has no effect.", key)
 
         self.log.debug(
-            f"Initializing NetboxSource: id={id}, url={self.config.url}, "
-            f"ttl={self.config.ttl}, ssl_verify={self.config.ssl_verify}"
+            "Initializing NetboxSource: id=%s, url=%s, ttl=%s, ssl_verify=%s",
+            id,
+            self.config.url,
+            self.config.ttl,
+            self.config.ssl_verify,
         )
 
         self._nb_client = pynetbox.api(url=self.config.url, token=self.config.token)
@@ -141,7 +145,7 @@ class NetboxSource(BaseSource):
             vrf_obj = self._nb_client.ipam.vrfs.get(name=name)
             if vrf_obj is None:
                 raise ValueError(f"VRF '{name}' not found. Use a valid name or VRF ID.")
-            return vrf_obj.id
+            return cast(int, vrf_obj.id)
         except (ValueError, AttributeError) as exc:
             raise ValueError(
                 f"Failed to retrieve VRF information by name '{name}'. "
@@ -155,13 +159,19 @@ class NetboxSource(BaseSource):
             vrf = {"vrf_id": "null"}
         elif self._vrf is not None:
             vrf = {"vrf_id": self._vrf}
-        return self._nb_client.ipam.ip_addresses.filter(
-            **filters, **vrf, tag=self.config.populate_tags
+        return cast(
+            Iterable[Any],
+            self._nb_client.ipam.ip_addresses.filter(
+                **filters, **vrf, tag=self.config.populate_tags
+            ),
         )
 
     def populate(self, zone: Zone, target: bool = False, lenient: bool = False) -> None:
         self.log.debug(
-            f"populate called for zone={zone.name}, target={target}, lenient={lenient}"
+            "populate called for zone=%s, target=%s, lenient=%s",
+            zone.name,
+            target,
+            lenient,
         )
         before = len(zone.records)
         if reversename.is_reverse(zone):
@@ -176,7 +186,7 @@ class NetboxSource(BaseSource):
             try:
                 zone.add_record(record, lenient=lenient)
             except SubzoneRecordException:
-                self.log.warning(f"Skipping subzone record: {record}")
+                self.log.warning("Skipping subzone record: %s", record)
         self.log.info(
             "Populated %s new records in zone %s", len(zone.records) - before, zone.name
         )
@@ -202,7 +212,7 @@ class NetboxSource(BaseSource):
                 fqdns = fqdns[:1]
             for fqdn in fqdns:
                 rr = ResourceRecord(ptr_name, "PTR", fqdn)
-                self.log.debug(f"Adding PTR record {rr} to zone {zone.name}")
+                self.log.debug("Adding PTR record %s to zone %s", rr, zone.name)
                 records.append(rr)
         return records
 
@@ -215,12 +225,12 @@ class NetboxSource(BaseSource):
             record_type = "A" if ip_address.version == 4 else "AAAA"
             for fqdn in _fqdns(ipam_record[field_name]):
                 if not self._fqdn_in_zone(fqdn, zone):
-                    self.log.debug(f"Skip: FQDN={fqdn} on zone {zone.name}")
+                    self.log.debug("Skip: FQDN=%s on zone %s", fqdn, zone.name)
                     continue
                 name = zone.hostname_from_fqdn(fqdn)
                 rr = ResourceRecord(name, record_type, ip_address.compressed)
                 self.log.debug(
-                    f"Created {record_type} record {rr} for zone {zone.name}"
+                    "Created %s record %s for zone %s", record_type, rr, zone.name
                 )
                 records.append(rr)
         return records

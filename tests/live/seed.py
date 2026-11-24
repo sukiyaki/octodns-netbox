@@ -237,7 +237,7 @@ def seed_perf(netbox: NetBox, count: int) -> None:
     """Add `count` addresses in 198.18.0.0/16, each named in PERF_FORWARD_ZONE."""
     payload = [
         {"address": f"{host}/16", "description": f"perf-{i}.{PERF_FORWARD_ZONE[:-1]}"}
-        for i, host in zip(range(count), _PERF_NETWORK.hosts())
+        for i, host in zip(range(count), _PERF_NETWORK.hosts(), strict=False)
     ]
     for chunk in _chunks(payload, _BULK_SIZE):
         netbox.post("ipam/ip-addresses/", chunk)

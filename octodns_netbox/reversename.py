@@ -1,5 +1,6 @@
 import ipaddress
 import re
+from typing import cast
 
 from octodns.zone import Zone
 
@@ -13,7 +14,7 @@ _IPV4_FIRST_LABEL = re.compile(
 
 
 def is_reverse(zone: Zone) -> bool:
-    return zone.name.endswith((_IPV4_SUFFIX, _IPV6_SUFFIX))
+    return cast(str, zone.name).endswith((_IPV4_SUFFIX, _IPV6_SUFFIX))
 
 
 def to_network(zone: Zone) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
@@ -70,6 +71,6 @@ def from_address(
     if zone.name.count(".") < pointer.count("."):
         # A classless zone with fewer than four labels before in-addr.arpa,
         # such as "0/26.0.192.in-addr.arpa.", holds every address at its apex.
-        return zone.name
+        return cast(str, zone.name)
     host_octet = pointer.split(".")[0]
     return f"{host_octet}.{zone.name}"

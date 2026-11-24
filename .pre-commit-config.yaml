@@ -22,10 +22,13 @@ repos:
     args: [--fix]
     # Run the formatter.
   - id: ruff-format
-- repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v2.4.1
+- repo: local
   hooks:
+  # mypy runs in the project's environment to see pydantic's types. uv.lock
+  # pins its version, and pyproject.toml holds its settings.
   - id: mypy
-    files: octodns_netbox
-    args: [--ignore-missing-imports, --pretty]
-    additional_dependencies: [types-requests]
+    name: mypy
+    entry: uv run --locked mypy
+    language: system
+    files: ^octodns_netbox/
+    pass_filenames: false
