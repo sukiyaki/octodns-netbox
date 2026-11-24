@@ -1,6 +1,6 @@
 [build-system]
-build-backend = "poetry_dynamic_versioning.backend"
-requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+build-backend = "hatchling.build"
+requires = ["hatch-vcs>=0.5.0", "hatchling>=1.27.0"]
 
 [project]
 authors = [
@@ -19,35 +19,62 @@ classifiers = [
   'Programming Language :: Python :: 3.14'
 ]
 dependencies = [
-  "octodns (>=1.10.0,<2.0.0)",
-  "pydantic (>=2.10.5,<3.0.0)",
-  "pynetbox (>=7.4.1,<8.0.0)",
-  "requests (>=2.32.3,<3.0.0)"
+  "octodns>=1.10.0,<2.0.0",
+  "pydantic>=2.10.5,<3.0.0",
+  "pynetbox>=7.4.1,<8.0.0",
+  "requests>=2.32.3,<3.0.0"
 ]
 description = "A NetBox source for octoDNS."
 dynamic = ["version"]
-homepage = "https://github.com/sukiyaki/octodns-netbox"
 license = "MIT"
 name = "octodns-netbox"
 readme = "README.md"
 requires-python = ">=3.10,<4"
 
-[tool.poetry]
-version = "0.0.0"
+[project.urls]
+Homepage = "https://github.com/sukiyaki/octodns-netbox"
 
-[tool.poetry.group.dev.dependencies]
-pre-commit = "^4.0.0"
-pytest = "^9.0.0"
-pytest-cov = "^7.0.0"
-requests-mock = "^1.12.0"
-tox = "^4.0.0"
+[dependency-groups]
+dev = [
+  "pre-commit>=4.0.0",
+  "pytest>=9.0.0",
+  "pytest-cov>=7.0.0",
+  "requests-mock>=1.12.0"
+]
 
-[tool.poetry.requires-plugins]
-poetry-dynamic-versioning = {version = ">=1.0.0,<2.0.0", extras = ["plugin"]}
+[tool.coverage.report]
+fail_under = 100
 
-[tool.poetry-dynamic-versioning]
-bump = true
-enable = true
-metadata = false
-style = "pep440"
-vcs = "git"
+[tool.coverage.run]
+source = ["octodns_netbox"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/octodns_netbox"]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+# PyPI rejects local versions, so drop the "+g<sha>" part: 0.5.1.devN.
+local_scheme = "no-local-version"
+
+[tool.pytest.ini_options]
+addopts = ["--cov", "--cov-report=term-missing"]
+testpaths = ["tests"]
+
+[tool.uv]
+# uv build installs the build backend in a separate environment, which
+# uv.lock does not cover. These pins fix each package there, and uv.lock
+# records them.
+build-constraint-dependencies = [
+  "hatch-vcs==0.5.0",
+  "hatchling==1.33.0",
+  "packaging==26.4",
+  "pathspec==1.1.1",
+  "pluggy==1.7.0",
+  "setuptools==84.2.1",
+  "setuptools-scm==10.3.4",
+  "tomlkit==0.15.3",
+  "trove-classifiers==2026.9.21.13",
+  "vcs-versioning==2.6.0"
+]
