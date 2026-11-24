@@ -1,0 +1,5 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  value: description-2001-0db8-1000-1.example.com.

@@ -85,6 +85,21 @@ class TestToNetworkIPv6:
         assert to_network(zone_64) == ipaddress.IPv6Network("2001:db8:abdc::/64")
 
     @pytest.mark.parametrize(
+        ("name", "network"),
+        [
+            (f"{'0.' * 21}8.b.d.0.1.0.0.2.ip6.arpa.", "2001:db8::/116"),
+            (f"c.b.a.{'0.' * 20}8.b.d.0.1.0.0.2.ip6.arpa.", "2001:db8::abc0/124"),
+            (f"1.{'0.' * 23}8.b.d.0.1.0.0.2.ip6.arpa.", "2001:db8::1/128"),
+        ],
+    )
+    def test_to_network_ipv6_prefix_longer_than_112(self, name, network):
+        assert to_network(Zone(name, [])) == ipaddress.IPv6Network(network)
+
+    def test_from_address_ipv6_host_zone_is_the_apex(self):
+        zone = Zone(f"1.{'0.' * 23}8.b.d.0.1.0.0.2.ip6.arpa.", [])
+        assert from_address(zone, ipaddress.IPv6Address("2001:db8::1")) == zone.name
+
+    @pytest.mark.parametrize(
         "name",
         ["00.ip6.arpa.", "0.00.ip6.arpa.", "db8.1.0.0.2.ip6.arpa.", "g.ip6.arpa."],
     )

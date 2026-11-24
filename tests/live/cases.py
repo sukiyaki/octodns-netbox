@@ -13,6 +13,10 @@ import seed
 
 V6_64 = "0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa."  # 2001:db8::/64
 V6_100 = "0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa."  # /100
+# Zones with more labels than a "::" address can hold, which do not overlap.
+V6_116 = f"{'0.' * 21}8.b.d.0.1.0.0.2.ip6.arpa."  # 2001:db8::/116
+V6_124 = f"0.0.0.0.0.0.1.{'0.' * 16}8.b.d.0.1.0.0.2.ip6.arpa."  # 2001:db8::1000:0/124
+V6_128 = f"1.0.0.0.1.{'0.' * 19}8.b.d.0.1.0.0.2.ip6.arpa."  # 2001:db8::1:1/128
 VRF_ZONES = ("example.com.", "2.0.192.in-addr.arpa.", "3.0.192.in-addr.arpa.")
 TAG_ZONES = ("example.org.", "5.0.192.in-addr.arpa.")
 
@@ -88,6 +92,7 @@ def cases(vrf_ids: dict[str, int]) -> list[Case]:
         Case("idn-case", ("idn-case.example.", "11.0.192.in-addr.arpa.")),
         Case("vrf-duplicate", ("7.0.192.in-addr.arpa.",)),
         Case("vrf-anycast", ("10.0.192.in-addr.arpa.",)),
+        Case("ipv6-long-prefix", (V6_116, V6_124, V6_128)),
         Case(
             "vrf-name-not-found",
             (),

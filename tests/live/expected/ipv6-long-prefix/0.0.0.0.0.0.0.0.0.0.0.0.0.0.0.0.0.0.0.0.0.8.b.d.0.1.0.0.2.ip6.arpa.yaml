@@ -1,0 +1,9 @@
+---
+2.0.0:
+  ttl: 60
+  type: PTR
+  value: description-2001-0db8-2.example.com.
+3.0.0:
+  ttl: 60
+  type: PTR
+  value: description-2001-0db8-3.example.com.

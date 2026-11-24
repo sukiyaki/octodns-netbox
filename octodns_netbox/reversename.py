@@ -54,9 +54,9 @@ def to_network_v6(zone: Zone) -> ipaddress.IPv6Network:
                 f"Invalid reverse zone '{zone.name}'. Each label before "
                 f"'.ip6.arpa.' is one nibble, so '{label}' must be one hex digit."
             )
-    nibbles = "".join(reversed(labels))
-    hextets = [nibbles[i : i + 4].ljust(4, "0") for i in range(0, len(nibbles), 4)]
-    return ipaddress.IPv6Network(f"{':'.join(hextets)}::/{4 * len(labels)}")
+    prefixlen = 4 * len(labels)
+    network = int("".join(reversed(labels)), 16) << (128 - prefixlen)
+    return ipaddress.IPv6Network((network, prefixlen))
 
 
 def from_address(

@@ -1,0 +1,5 @@
+---
+? ''
+: ttl: 60
+  type: PTR
+  value: description-host1.example.com.

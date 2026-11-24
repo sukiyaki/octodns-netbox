@@ -22,7 +22,7 @@ It then creates a PTR record for each IP address in that network.
 - A classless IPv4 zone, for a prefix length from 25 to 31, starts with the last octet of the network address and the prefix length.
   `64/26.2.0.192.in-addr.arpa.` is `192.0.2.64/26`.
   `0/26` is the RFC 2317 form, and `0-26` is the RFC 4183 form.
-- An IPv6 zone has one hexadecimal digit for each 4 bits of the network.
+- An IPv6 zone has one hexadecimal digit for each 4 bits of the network, from 1 digit for a `/4` to 32 digits for one address, a `/128`.
 
 The mask of an IP address in NetBox does not matter.
 For example, `192.0.2.3/29` gets a PTR record in zone `2.0.192.in-addr.arpa.`.
