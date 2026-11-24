@@ -82,6 +82,7 @@ def cases(vrf_ids: dict[str, int]) -> list[Case]:
         Case("url-api-suffix", ("example.org.",), {"url": "env/NETBOX_API_URL"}),
         Case("zone-like-label", ("example.net.",)),
         Case("upper-case", ("example.test.", "100.51.198.in-addr.arpa.")),
+        Case("classless-short", ("0/26.0.192.in-addr.arpa.",)),
         Case("idn", ("café.example.", "113.0.203.in-addr.arpa.")),
         Case("idn-underscore", ("ex_ample.com.", "8.0.192.in-addr.arpa.")),
         Case("idn-case", ("idn-case.example.", "11.0.192.in-addr.arpa.")),

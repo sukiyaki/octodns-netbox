@@ -58,7 +58,9 @@ def from_address(
 
     That is the address's reverse pointer, "1.2.0.192.in-addr.arpa." for
     192.0.2.1, except in a classless zone, which adds the host octet to its
-    name: "1.0/26.2.0.192.in-addr.arpa." in zone "0/26.2.0.192.in-addr.arpa.".
+    name: "1.0/26.2.0.192.in-addr.arpa." in zone "0/26.2.0.192.in-addr.arpa.",
+    and "5.0/26.0.192.in-addr.arpa." for 192.0.0.5 in zone
+    "0/26.0.192.in-addr.arpa.".
     """
     if not is_reverse(zone):
         raise ValueError(
@@ -68,9 +70,9 @@ def from_address(
     pointer = f"{address.reverse_pointer}."
     if pointer == zone.name or pointer.endswith(f".{zone.name}"):
         return pointer
-    if zone.name.count(".") < pointer.count("."):
-        # A classless zone with fewer than four labels before in-addr.arpa,
-        # such as "0/26.0.192.in-addr.arpa.", holds every address at its apex.
-        return cast(str, zone.name)
-    host_octet = pointer.split(".")[0]
-    return f"{host_octet}.{zone.name}"
+    if zone.name.endswith(_IPV4_SUFFIX):
+        host_octet = pointer.split(".")[0]
+        return f"{host_octet}.{zone.name}"
+    # An IPv6 zone with a label of two or more digits, such as "00.ip6.arpa.",
+    # has no PTR names. Its addresses stay at the apex, as in 0.5.0.
+    return cast(str, zone.name)

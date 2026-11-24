@@ -80,13 +80,36 @@ class TestFromAddressIPv4:
             == "1.0/26.2.100.10.in-addr.arpa."
         )
 
-    def test_from_address_ipv4_classless_zone_with_fewer_labels_is_the_apex(self):
-        # Pins the behavior of 0.5.0. Every address of the zone gets this name.
-        zone = Zone("0/26.0.192.in-addr.arpa.", [])
-        assert (
-            from_address(zone, ipaddress.IPv4Address("192.0.0.5"))
-            == "0/26.0.192.in-addr.arpa."
-        )
+    @pytest.mark.parametrize(
+        ("zone_name", "network", "address", "owner"),
+        [
+            (
+                "0/26.0.192.in-addr.arpa.",
+                "192.0.0.0/26",
+                "192.0.0.5",
+                "5.0/26.0.192.in-addr.arpa.",
+            ),
+            (
+                "64-26.0.192.in-addr.arpa.",
+                "192.0.64.0/26",
+                "192.0.64.5",
+                "5.64-26.0.192.in-addr.arpa.",
+            ),
+            (
+                "0/25.192.in-addr.arpa.",
+                "192.0.0.0/25",
+                "192.0.0.1",
+                "1.0/25.192.in-addr.arpa.",
+            ),
+            ("0/26.in-addr.arpa.", "0.0.0.0/26", "0.0.0.2", "2.0/26.in-addr.arpa."),
+        ],
+    )
+    def test_classless_zone_with_fewer_labels(self, zone_name, network, address, owner):
+        zone, address = Zone(zone_name, []), ipaddress.IPv4Address(address)
+        # NetBox returns only the addresses in the network of the zone.
+        assert to_network(zone) == ipaddress.IPv4Network(network)
+        assert address in to_network(zone)
+        assert from_address(zone, address) == owner
 
     def test_from_address_ipv4_host_zone_is_the_apex(self):
         zone = Zone("1.2.0.192.in-addr.arpa.", [])
@@ -128,6 +151,11 @@ class TestFromAddressIPv6:
             from_address(zone_64, ipaddress.IPv6Address("2001:db8::1"))
             == "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa."
         )
+
+    def test_from_address_ipv6_zone_with_a_two_digit_label_is_the_apex(self):
+        # Pins the behavior of 0.5.0. "00" is no nibble, so no name is right.
+        zone = Zone("00.ip6.arpa.", [])
+        assert from_address(zone, ipaddress.IPv6Address("::1")) == "00.ip6.arpa."
 
     def test_from_address_ipv6_fails_due_to_invalid_zone(self):
         zone_invalid_1 = Zone(

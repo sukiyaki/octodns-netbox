@@ -177,6 +177,11 @@ IPS = (
     # NetBox stores dns_name in lower case, and description as written.
     Ip("198.51.100.1/24", "Host1.Example.TEST"),
     Ip("198.51.100.2/24", "Host2.example.test"),
+    # Classless zone 0/26.0.192.in-addr.arpa., three labels before in-addr.arpa,
+    # covers 192.0.0.0/26. 192.0.0.65 is outside it.
+    Ip("192.0.0.5/26", "host-192-0-0-5.example"),
+    Ip("192.0.0.6/26", "host-192-0-0-6.example,alias-192-0-0-6.example"),
+    Ip("192.0.0.65/24", "host-192-0-0-65.example"),
     # Zones café.example. and 113.0.203.in-addr.arpa.: internationalized names.
     # octoDNS spells café.example. as xn--caf-dma.example., and the query
     # matches only names that spell the zone that way, in any case. The first
