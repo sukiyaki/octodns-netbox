@@ -11,7 +11,9 @@ reaches the responses cannot leave stale fixtures behind. To rewrite them:
 
     uv run tests/live/run.py --netbox 4.7 --record-fixtures
 
-Then it adds --perf-ip-count addresses and times --perf-runs full dumps.
+It dumps the "description" case again with a misspelled key added, and fails
+unless the source warns about the key and the zones and requests stay the
+same. Then it adds --perf-ip-count addresses and times --perf-runs full dumps.
 
 Each run starts its own Compose project, octodns-netbox-live-<random> unless
 --project-name names one, and removes it at the end, also after Ctrl-C. It
@@ -26,6 +28,7 @@ files but no run.json. In the output of an earlier run, it replaces only
 these files:
 
     zones/<case>/<zone>yaml  the dumped zones
+    misspelled-key/          the zones dumped with the misspelled key
     fixtures/<case>.json     the recorded responses
     configs/<case>.yaml      the octoDNS configs (NETBOX_URL, NETBOX_API_URL
                              and NETBOX_TOKEN come from the environment)
@@ -33,6 +36,7 @@ these files:
     run.json                 versions, durations, result, errors, fixtures
     diff.txt                 differences from the expected zones
     fixtures.diff            differences from tests/fixtures/
+    misspelled-key.log       the warnings logged for the misspelled key
     octodns.log, netbox.log  logs
 
 Exit status: 0 when the zones and fixtures match, 1 when either differs or a
@@ -212,6 +216,47 @@ def dump(case: cases.Case, zones_dir: Path, config_path: Path) -> record.Recordi
     return record.Recording(sent, sub_zones)
 
 
+class WarningMessages(logging.Handler):
+    """Keeps the message of every record logged at WARNING or above."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.WARNING)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
+
+
+def check_misspelled_key(out: Path, base: record.Recording) -> str:
+    """Dump cases.MISSPELLED and compare it with the dump of cases.DESCRIPTION.
+
+    `base` is the recording of the DESCRIPTION dump. Raises unless the source
+    warned about cases.MISSPELLED_KEY and the zones and requests are the same.
+    """
+    zones = out / cases.MISSPELLED.name
+    warnings = WarningMessages()
+    logging.getLogger().addHandler(warnings)
+    try:
+        misspelled = dump(
+            cases.MISSPELLED, zones, out / "configs" / f"{cases.MISSPELLED.name}.yaml"
+        )
+    finally:
+        logging.getLogger().removeHandler(warnings)
+    warned = [m for m in warnings.messages if cases.MISSPELLED_KEY in m]
+    (out / f"{cases.MISSPELLED.name}.log").write_text("".join(f"{m}\n" for m in warned))
+    same_zones = tree_files(zones, "*.yaml") == tree_files(
+        out / "zones" / cases.DESCRIPTION.name, "*.yaml"
+    )
+    same_requests = _request_counts(misspelled.sent) == _request_counts(base.sent)
+    if not (warned and same_zones and same_requests):
+        raise RuntimeError(
+            f"{cases.MISSPELLED.name}: warned={warned}, same zones={same_zones}, "
+            f"same requests={same_requests}"
+        )
+    print(f"{cases.MISSPELLED_KEY} was ignored with a warning: {warned[0]}")
+    return "warned"
+
+
 def tree_files(root: Path, pattern: str) -> dict[str, list[str]]:
     if not root.is_dir():
         return {}
@@ -369,7 +414,7 @@ def prepare_output_dir(out: Path) -> None:
     others = [path for path in out.iterdir() if path.name != LOCK]
     if others and not (out / "run.json").is_file():
         sys.exit(f"{out} holds no run.json. Pass a new or empty --output-dir.")
-    for child in ("zones", "fixtures", "configs"):
+    for child in ("zones", "fixtures", "configs", cases.MISSPELLED.name):
         shutil.rmtree(out / child, ignore_errors=True)
     for name in (
         "perf.json",
@@ -378,6 +423,7 @@ def prepare_output_dir(out: Path) -> None:
         "run.json.partial",
         "diff.txt",
         "fixtures.diff",
+        f"{cases.MISSPELLED.name}.log",
         "netbox.log",
         "octodns.log",
     ):
@@ -434,6 +480,9 @@ def check_netbox(
         status, result = 0, "matches"
         print(f"The zones match {args.expected_dir}.")
     run["fixtures"] = check_fixtures(args, out, fixtures)
+    run["misspelled_key"] = check_misspelled_key(
+        out, recordings[cases.DESCRIPTION.name]
+    )
     if run["fixtures"] == "differs":
         status = 1
         result = "fixtures-differ" if result == "matches" else result

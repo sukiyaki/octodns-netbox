@@ -7,6 +7,7 @@ run must dump for it, so the replay and the live run check the same zones.
 """
 
 import json
+import logging
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -82,137 +83,119 @@ def expected_zone_names(case_name):
     )
 
 
-class TestNetboxSourceFailSenarios:
-    def test_init_failed_due_to_missing_url(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource("test")
-        assert excinfo.value.errors()[0]["loc"] == ("url",)
-        assert excinfo.value.errors()[0]["type"] == "missing"
-        assert excinfo.value.errors()[1]["loc"] == ("token",)
-        assert excinfo.value.errors()[1]["type"] == "missing"
+def assert_populates_expected_zones(source, case, case_name):
+    for zone_name, recorded in case["zones"].items():
+        zone = populate(source, case, zone_name)
+        expected = expected_zone(case_name, zone_name, recorded["sub_zones"])
+        assert expected.changes(zone, SimpleProvider()) == [], zone_name
 
-    def test_init_failed_due_to_missing_token(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource("test", url="http://netbox.example.com/")
-        assert excinfo.value.errors()[0]["loc"] == ("token",)
-        assert excinfo.value.errors()[0]["type"] == "missing"
 
-    def test_init_failed_due_to_invalid_field_name_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                field_name=["dns_name", "description"],
-            )
+SETTINGS = {"url": "http://netbox.example.com/", "token": "testtoken"}
 
-        assert excinfo.value.errors()[0]["loc"] == ("field_name",)
-        assert excinfo.value.errors()[0]["type"] == "string_type"
 
-    def test_init_failed_due_to_invalid_ttl_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test", url="http://netbox.example.com/", token="testtoken", ttl=[10]
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("ttl",)
-        assert excinfo.value.errors()[0]["type"] == "int_type"
+def rejected_keys(**settings):
+    """The config keys NetboxSource names when it refuses `settings`."""
+    with pytest.raises(ValidationError) as excinfo:
+        NetboxSource("netbox", **settings)
+    return {error["loc"][0] for error in excinfo.value.errors()}
 
-    def test_init_failed_due_to_invalid_ttl_value(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test", url="http://netbox.example.com/", token="testtoken", ttl="ten"
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("ttl",)
-        assert excinfo.value.errors()[0]["type"] == "int_parsing"
 
-    def test_init_failed_due_to_invalid_populate_tags_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_tags="tag",
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("populate_tags",)
-        assert excinfo.value.errors()[0]["type"] == "list_type"
+def test_init_requires_url_and_token():
+    assert rejected_keys() == {"url", "token"}
+    assert rejected_keys(url=SETTINGS["url"]) == {"token"}
 
-    def test_init_failed_due_to_invalid_populate_vrf_id_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_vrf_id=[10],
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("populate_vrf_id", "int")
-        assert excinfo.value.errors()[0]["type"] == "int_type"
-        assert excinfo.value.errors()[1]["loc"] == (
-            "populate_vrf_id",
-            "literal['null']",
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("url", "netbox.example.com"),
+        ("field_name", ["dns_name", "description"]),
+        ("populate_tags", "tag"),
+        ("populate_vrf_id", [10]),
+        ("populate_vrf_id", "ten"),
+        ("populate_vrf_name", ["TEST"]),
+        ("populate_subdomains", "ok"),
+        ("multivalue_ptr", "ok"),
+        ("ttl", [10]),
+        ("ttl", "ten"),
+        ("ssl_verify", "ok"),
+    ],
+)
+def test_init_rejects_a_value_of_the_wrong_type(key, value):
+    assert rejected_keys(**{**SETTINGS, key: value}) == {key}
+
+
+def test_init_rejects_both_populate_vrf_id_and_populate_vrf_name():
+    with pytest.raises(ValidationError, match="Do not set both populate_vrf_id"):
+        NetboxSource("netbox", **SETTINGS, populate_vrf_id=1, populate_vrf_name="mgmt")
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [{"populate_vrf_id": 1, "populate_vrf_name": "mgmt"}, {"ttl": "ten"}],
+)
+def test_init_error_does_not_contain_the_token(settings):
+    token = "nbt_K3yOfTheTest.S3cretOfTheTest0123456789"
+    with pytest.raises(ValidationError) as excinfo:
+        NetboxSource("netbox", url=SETTINGS["url"], token=token, **settings)
+    # str() shortens a long input to its start and end, so look for any piece.
+    pieces = {token[i : i + 8] for i in range(len(token) - 7)}
+    for text in (str(excinfo.value), excinfo.value.json()):
+        assert [piece for piece in pieces if piece in text] == []
+
+
+def test_init_logs_no_warning_for_known_settings(caplog):
+    NetboxSource(
+        "netbox",
+        **SETTINGS,
+        field_name="dns_name",
+        populate_tags=["dns"],
+        populate_vrf_id=1,
+        populate_subdomains=False,
+        multivalue_ptr=True,
+        ttl=120,
+        ssl_verify=False,
+    )
+    assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("populate_tag", ["prod"]),
+        ("populate_vrf", "mgmt"),
+        # Field names and aliases of the 0.5.0 config model.
+        ("SUPPORTS_MULTIVALUE_PTR", True),
+        ("SUPPORTS_DYNAMIC", True),
+        ("SUPPORTS", ["A"]),
+        ("SUPPORTS_GEO", True),
+        ("log", "ignored"),
+    ],
+)
+def test_unknown_key_logs_a_warning_and_changes_no_zone(caplog, key, value):
+    case = load_case("description")
+    with replaying(case["init"]):
+        source = NetboxSource("netbox", token="t", **case["source"], **{key: value})
+    warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert warnings == [f"Unknown setting {key} has no effect."]
+    assert_populates_expected_zones(source, case, "description")
+
+
+def test_populate_vrf_id_null_reads_the_global_vrf():
+    case = load_case("vrf-global-id")
+    assert case["source"]["populate_vrf_id"] == 0
+    with replaying(case["init"]):
+        source = NetboxSource(
+            "netbox", token="t", **{**case["source"], "populate_vrf_id": "null"}
         )
-        assert excinfo.value.errors()[1]["type"] == "literal_error"
-
-    def test_init_failed_due_to_invalid_populate_vrf_id_value(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_vrf_id="ten",
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("populate_vrf_id", "int")
-        assert excinfo.value.errors()[0]["type"] == "int_parsing"
-        assert excinfo.value.errors()[1]["loc"] == (
-            "populate_vrf_id",
-            "literal['null']",
-        )
-        assert excinfo.value.errors()[1]["type"] == "literal_error"
-
-    def test_init_failed_because_both_populate_vrf_id_populate_vrf_name_are_provided(
-        self,
-    ):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_vrf_id=1,
-                populate_vrf_name="TEST",
-            )
-        assert "Do not set both populate_vrf_id and populate_vrf" in str(excinfo.value)
-
-    def test_init_failed_due_to_invalid_populate_vrf_name_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_vrf_name=["TEST"],
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("populate_vrf_name",)
-        assert excinfo.value.errors()[0]["type"] == "string_type"
-
-    def test_init_failed_due_to_invalid_populate_subdomains_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_subdomains="ok",
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("populate_subdomains",)
-        assert excinfo.value.errors()[0]["type"] == "bool_parsing"
+    assert_populates_expected_zones(source, case, "vrf-global-id")
 
 
 @pytest.mark.parametrize("name", sorted(path.name for path in EXPECTED.iterdir()))
 def test_populate_returns_the_zones_the_live_run_dumps(name):
     case = load_case(name)
     assert sorted(case["zones"]) == expected_zone_names(name)
-    source = connect(case)
-    for zone_name, recorded in case["zones"].items():
-        zone = populate(source, case, zone_name)
-        expected = expected_zone(name, zone_name, recorded["sub_zones"])
-        assert expected.changes(zone, SimpleProvider()) == [], zone_name
+    assert_populates_expected_zones(connect(case), case, name)
 
 
 def test_init_fails_when_populate_vrf_name_is_not_in_netbox():

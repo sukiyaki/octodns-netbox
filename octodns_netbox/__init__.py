@@ -22,7 +22,6 @@ from pydantic import (
     BaseModel,
     BeforeValidator,
     ConfigDict,
-    Field,
     TypeAdapter,
     ValidationInfo,
     field_validator,
@@ -64,6 +63,11 @@ Url = Annotated[
     BeforeValidator(lambda value: str(TypeAdapter(AnyHttpUrl).validate_python(value))),
 ]
 
+# The IP addresses a source reads: those in every VRF (None), those without
+# a VRF, which NetBox calls the Global VRF ("global"), or those in the VRF
+# with this ID.
+VrfFilter = int | Literal["global"] | None
+
 
 class ResourceRecord(NamedTuple):
     """One value of a record. The source groups them by owner and type."""
@@ -74,37 +78,24 @@ class ResourceRecord(NamedTuple):
 
 
 class NetboxSourceConfig(BaseModel):
-    """Configuration model for the NetboxSource."""
+    """The settings of a NetboxSource in the octoDNS config.
 
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+    Unknown keys are dropped. NetboxSource logs a warning for each one.
+    """
 
-    multivalue_ptr: bool = False
-    SUPPORTS_MULTIVALUE_PTR_: bool = Field(
-        default_factory=lambda: False,
-        alias="SUPPORTS_MULTIVALUE_PTR",
-        description="Whether multiple PTR records are supported.",
-    )
-    SUPPORTS_DYNAMIC_: bool = Field(
-        False,
-        alias="SUPPORTS_DYNAMIC",
-        description="Whether dynamic records are supported.",
-    )
-    SUPPORTS_GEO: bool = False
-    SUPPORTS: set[str] = {"A", "AAAA", "PTR"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
-    id: str
     url: Url
     token: str
     field_name: str = "description"
     populate_tags: list[str] = []
-    populate_vrf_id: Annotated[
-        int | Literal["null"] | None, Field(validate_default=True)
-    ] = None
-    populate_vrf_name: Annotated[str | None, Field(validate_default=True)] = None
+    # "null" is the Global VRF, like 0.
+    populate_vrf_id: int | Literal["null"] | None = None
+    populate_vrf_name: str | None = None
     populate_subdomains: bool = True
+    multivalue_ptr: bool = False
     ttl: int = 60
     ssl_verify: bool = True
-    log: logging.Logger
 
     @field_validator("url")
     def remove_trailing_api(cls, v: str) -> str:
@@ -122,28 +113,21 @@ class NetboxSourceConfig(BaseModel):
         return v
 
     @field_validator("populate_vrf_name")
-    def validate_vrf_name(cls, v: str | None, info: ValidationInfo) -> str | None:
+    @classmethod
+    def validate_one_vrf(cls, value: str | None, info: ValidationInfo) -> str | None:
         """
         Ensures that populate_vrf_name and populate_vrf_id
         are not set simultaneously.
 
-        Args:
-            v (Optional[str]): The VRF name to validate.
-            info (ValidationInfo): Contains context about the overall model.
-
-        Returns:
-            Optional[str]: The validated VRF name.
-
         Raises:
             ValueError: If both populate_vrf_id and populate_vrf_name are set.
         """
-        data = info.data
-        if v is not None and data.get("populate_vrf_id") is not None:
+        if value is not None and info.data.get("populate_vrf_id") is not None:
             raise ValueError("Do not set both populate_vrf_id and populate_vrf_name.")
-        return v
+        return value
 
 
-class NetboxSource(BaseSource, NetboxSourceConfig):
+class NetboxSource(BaseSource):
     """
     NetboxSource class for octoDNS.
 
@@ -152,81 +136,88 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
     records in octoDNS.
     """
 
-    def __init__(self, id: str, **kwargs: typing.Any):
+    SUPPORTS_GEO = False
+    SUPPORTS = frozenset({"A", "AAAA", "PTR"})
+
+    def __init__(self, id: str, **settings: typing.Any):
         """
-        Initializes the NetboxSource by combining BaseSource and NetboxSourceConfig.
+        Validates the settings and connects the NetBox client.
 
         Args:
             id (str): The unique identifier for this source.
-            **kwargs (dict): Additional keyword arguments to configure the source.
+            **settings: The source's keys from the octoDNS config,
+                validated by NetboxSourceConfig.
         """
-        # Set the mandatory 'id' and a dedicated logger
-        kwargs["id"] = id
-        kwargs["log"] = logging.getLogger(f"{self.__class__.__name__}[{id}]")
-
-        # Initialize the configuration model (NetboxSourceConfig)
-        NetboxSourceConfig.__init__(self, **kwargs)
-
-        # Initialize the octoDNS BaseSource
-        BaseSource.__init__(self, id)
+        self.log = logging.getLogger(f"{self.__class__.__name__}[{id}]")
+        self.config = NetboxSourceConfig(**settings)
+        super().__init__(id)
+        for key in settings:
+            if key not in NetboxSourceConfig.model_fields:
+                self.log.warning("Unknown setting %s has no effect.", key)
 
         self.log.debug(
-            f"Initializing NetboxSource: id={id}, url={self.url}, "
-            f"ttl={self.ttl}, ssl_verify={self.ssl_verify}"
+            f"Initializing NetboxSource: id={id}, url={self.config.url}, "
+            f"ttl={self.config.ttl}, ssl_verify={self.config.ssl_verify}"
         )
 
         # Initialize NetBox client
-        self._nb_client = pynetbox.api(url=self.url, token=self.token)
+        self._nb_client = pynetbox.api(url=self.config.url, token=self.config.token)
         session = requests.Session()
-        session.verify = self.ssl_verify
+        session.verify = self.config.ssl_verify
         self._nb_client.http_session = session
 
-        # Initialize VRF settings (if specified)
-        self._init_vrf()
+        self._vrf = self._resolve_vrf()
 
-    def _init_vrf(self) -> None:
+    def _resolve_vrf(self) -> VrfFilter:
         """
-        Retrieves the VRF ID from NetBox if 'populate_vrf_name' is set,
-        or handles the special "Global"/ID=0 case.
-        """
-        if self._is_global_vrf():
-            self.populate_vrf_id = "null"
-            return
-
-        if self.populate_vrf_name is not None:
-            self._set_vrf_id_from_name()
-
-    def _is_global_vrf(self) -> bool:
-        """
-        Determines if the user explicitly wants the 'Global' VRF or has ID=0.
-        Interprets this as "null" in NetBox.
+        Resolves populate_vrf_id or populate_vrf_name to the VRF to read.
+        ID 0, ID "null", and the name "Global" mean the Global VRF. A VRF name
+        is looked up in NetBox.
 
         Returns:
-            bool: True if the VRF should be treated as global/null, False otherwise.
-        """
-        return self.populate_vrf_name == "Global" or self.populate_vrf_id == 0
-
-    def _set_vrf_id_from_name(self) -> None:
-        """
-        Retrieves the VRF from NetBox by name and sets the 'populate_vrf_id'.
-        Raises a ValueError if the VRF cannot be found.
+            VrfFilter: The VRF the source reads IP addresses from.
 
         Raises:
             ValueError: If VRF name is invalid or not found in NetBox.
         """
+        name, vrf_id = self.config.populate_vrf_name, self.config.populate_vrf_id
+        if name == "Global" or vrf_id == 0 or vrf_id == "null":
+            return "global"
+        if name is None:
+            return vrf_id
         try:
-            vrf_obj = self._nb_client.ipam.vrfs.get(name=self.populate_vrf_name)
+            vrf_obj = self._nb_client.ipam.vrfs.get(name=name)
             if vrf_obj is None:
-                raise ValueError(
-                    f"VRF '{self.populate_vrf_name}' not found. "
-                    "Use a valid name or VRF ID."
-                )
-            self.populate_vrf_id = vrf_obj.id
+                raise ValueError(f"VRF '{name}' not found. Use a valid name or VRF ID.")
+            return vrf_obj.id
         except (ValueError, AttributeError) as exc:
             raise ValueError(
-                f"Failed to retrieve VRF information by name '{self.populate_vrf_name}'. "
+                f"Failed to retrieve VRF information by name '{name}'. "
                 "Use a valid populate_vrf_id instead."
             ) from exc
+
+    def _ip_addresses(
+        self, filters: dict[str, typing.Any]
+    ) -> typing.Iterable[typing.Any]:
+        """
+        Queries NetBox for the IP addresses that match `filters`, the VRF,
+        and the tags.
+
+        Args:
+            filters (dict[str, Any]): The zone's filters for NetBox.
+
+        Returns:
+            Iterable[Any]: The IPAM records NetBox returns.
+        """
+        vrf: dict[str, int | str] = {}
+        if self._vrf == "global":
+            # NetBox reads vrf_id=null as "no VRF".
+            vrf = {"vrf_id": "null"}
+        elif self._vrf is not None:
+            vrf = {"vrf_id": self._vrf}
+        return self._nb_client.ipam.ip_addresses.filter(
+            **filters, **vrf, tag=self.config.populate_tags
+        )
 
     def populate(self, zone: Zone, target: bool = False, lenient: bool = False) -> None:
         """
@@ -273,40 +264,14 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             list[ResourceRecord]: The PTR records.
         """
         network = octodns_netbox.reversename.to_network(zone)
-        filter_kwargs = self._build_ptr_filter_kwargs(network, family)
-
-        ipam_records = self._nb_client.ipam.ip_addresses.filter(**filter_kwargs)
+        ipam_records = self._ip_addresses(
+            {
+                f"{self.config.field_name}__empty": "false",
+                "parent": network.compressed,
+                "family": family,
+            }
+        )
         return self._build_ptr_records(zone, ipam_records)
-
-    def _build_ptr_filter_kwargs(
-        self, network: typing.Any, family: Literal[4, 6]
-    ) -> dict[str, typing.Any]:
-        """
-        Builds the filter kwargs for NetBox queries when populating PTR records.
-
-        Args:
-            network (Any): The IP network derived from the reverse zone.
-            family (Literal[4, 6]): The IP family (4 or 6).
-
-        Returns:
-            dict[str, Any]: A dictionary of filter criteria for NetBox.
-        """
-        filter_kwargs = {
-            f"{self.field_name}__empty": "false",
-            "parent": network.compressed,
-            "family": family,
-            "vrf_id": self.populate_vrf_id,
-            "tag": self.populate_tags,
-        }
-
-        # https://github.com/netbox-community/pynetbox/pull/545
-        # From pynetbox v7.4.0, None will be mapped to null.
-        # When vrf_id is null, it does not mean that it is not filtered by vrf_id,
-        # but it would be an intention that VRF is not set.
-        if filter_kwargs["vrf_id"] is None:
-            del filter_kwargs["vrf_id"]
-
-        return filter_kwargs
 
     def _build_ptr_records(
         self,
@@ -331,8 +296,8 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
             )
             # Potentially multiple FQDNs in the designated field
             fqdns = self._parse_fqdns_list(
-                ipam_record[self.field_name],
-                len_limit=None if self.multivalue_ptr else 1,
+                ipam_record[self.config.field_name],
+                len_limit=None if self.config.multivalue_ptr else 1,
             )
             for fqdn in fqdns:
                 rr = ResourceRecord(ptr_name, "PTR", fqdn)
@@ -350,30 +315,11 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         Returns:
             list[ResourceRecord]: The A and AAAA records.
         """
-        filter_kwargs = self._build_forward_filter_kwargs(zone)
-        ipam_records = self._nb_client.ipam.ip_addresses.filter(**filter_kwargs)
-
-        return self._build_forward_records(zone, ipam_records)
-
-    def _build_forward_filter_kwargs(self, zone: Zone) -> dict[str, typing.Any]:
-        """
-        Builds the filter kwargs for NetBox queries when populating forward A/AAAA records.
-
-        Args:
-            zone (Zone): The forward zone for which to build query filters.
-
-        Returns:
-            dict[str, Any]: A dictionary of filter criteria for NetBox queries.
-        """
         zone_name_no_dot = zone.name.rstrip(".")
-        filter_kwargs = {
-            f"{self.field_name}__ic": zone_name_no_dot,
-            "vrf_id": self.populate_vrf_id,
-            "tag": self.populate_tags,
-        }
-        if filter_kwargs["vrf_id"] is None:
-            del filter_kwargs["vrf_id"]
-        return filter_kwargs
+        ipam_records = self._ip_addresses(
+            {f"{self.config.field_name}__ic": zone_name_no_dot}
+        )
+        return self._build_forward_records(zone, ipam_records)
 
     def _build_forward_records(
         self, zone: Zone, ipam_records: typing.Iterable[typing.Any]
@@ -416,7 +362,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         record_type: Literal["A", "AAAA"] = "A" if ip_address.version == 4 else "AAAA"
 
         # Parse out any FQDNs listed in the desired NetBox field
-        fqdns = self._parse_fqdns_list(ipam_record[self.field_name])
+        fqdns = self._parse_fqdns_list(ipam_record[self.config.field_name])
 
         # For each FQDN, determine if it belongs to this zone and create records
         for fqdn in fqdns:
@@ -437,7 +383,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
 
         1. If FQDN matches the zone's apex (fqdn == zone.name), it's valid.
         2. If FQDN ends with ".<zone.name>", it's valid. However, if
-           self.populate_subdomains is False, we exclude deeper subdomains.
+           populate_subdomains is False, we exclude deeper subdomains.
         3. Otherwise, it's invalid.
 
         Args:
@@ -453,7 +399,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         if fqdn.endswith(f".{zone.name}"):
             leftover = fqdn[: -len(zone.name)].rstrip(".")
             # If not populating subdomains, exclude multi-level subdomains
-            if self.populate_subdomains or "." not in leftover:
+            if self.config.populate_subdomains or "." not in leftover:
                 return True
 
         return False
@@ -474,7 +420,7 @@ class NetboxSource(BaseSource, NetboxSourceConfig):
         rdatas: dict[tuple[str, str], list[str]] = defaultdict(list)
         for rr in rrs:
             rdatas[(rr.owner, rr.type)].append(rr.rdata)
-        for record in _octodns_records(zone, rdatas, self.ttl, lenient):
+        for record in _octodns_records(zone, rdatas, self.config.ttl, lenient):
             try:
                 zone.add_record(record, lenient=lenient)
             except SubzoneRecordException:

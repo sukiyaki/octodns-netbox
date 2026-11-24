@@ -6,7 +6,7 @@ a configured zone inside another configured zone as a sub-zone, so only the
 as tests/fixtures/<case>.json for the unit tests.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import seed
@@ -26,19 +26,29 @@ class Case:
     init_error: str | None = None
 
 
+DESCRIPTION = Case(
+    "description",
+    (
+        "example.com.",
+        "example.org.",
+        "2.0.192.in-addr.arpa.",
+        "3.0.192.in-addr.arpa.",
+        V6_64,
+    ),
+)
+
+# DESCRIPTION with a misspelled key. octoDNS must start, the source must warn
+# that the key has no effect, and the dump must equal DESCRIPTION's.
+MISSPELLED_KEY = "populate_tag"
+MISSPELLED = replace(
+    DESCRIPTION, name="misspelled-key", settings={MISSPELLED_KEY: ["prod"]}
+)
+
+
 def cases(vrf_ids: dict[str, int]) -> list[Case]:
     mgmt = vrf_ids[seed.MGMT_VRF]
     return [
-        Case(
-            "description",
-            (
-                "example.com.",
-                "example.org.",
-                "2.0.192.in-addr.arpa.",
-                "3.0.192.in-addr.arpa.",
-                V6_64,
-            ),
-        ),
+        DESCRIPTION,
         Case(
             "dns-name",
             ("example.com.", "2.0.192.in-addr.arpa.", V6_64),
