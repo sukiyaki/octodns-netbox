@@ -80,6 +80,7 @@ def cases(vrf_ids: dict[str, int]) -> list[Case]:
         Case("custom-ttl", TAG_ZONES, {"ttl": 120}),
         # run.py sets NETBOX_API_URL to NETBOX_URL followed by "/api/".
         Case("url-api-suffix", ("example.org.",), {"url": "env/NETBOX_API_URL"}),
+        Case("zone-like-label", ("example.net.",)),
         Case(
             "vrf-name-not-found",
             (),

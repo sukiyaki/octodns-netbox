@@ -66,7 +66,7 @@ def from_address(
             "Zone must end with '.in-addr.arpa.' (IPv4) or '.ip6.arpa.' (IPv6)."
         )
     pointer = f"{address.reverse_pointer}."
-    if pointer.endswith(zone.name):
+    if pointer == zone.name or pointer.endswith(f".{zone.name}"):
         return pointer
     if zone.name.count(".") < pointer.count("."):
         # A classless zone with fewer than four labels before in-addr.arpa,

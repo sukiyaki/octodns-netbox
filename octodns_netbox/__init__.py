@@ -65,7 +65,7 @@ VrfFilter = int | Literal["global"] | None
 class ResourceRecord(NamedTuple):
     """One value of a record. The source groups them by owner and type."""
 
-    owner: str  # relative to the zone
+    owner: str  # FQDN. octoDNS makes it relative to the zone.
     type: str
     rdata: str
 
@@ -204,9 +204,7 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
         records: list[ResourceRecord] = []
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
-            ptr_name = zone.hostname_from_fqdn(
-                reversename.from_address(zone, ip_address)
-            )
+            ptr_name = reversename.from_address(zone, ip_address)
             fqdns = _fqdns(ipam_record[field_name])
             if not self.config.multivalue_ptr:
                 fqdns = fqdns[:1]
@@ -227,8 +225,7 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 if not self._fqdn_in_zone(fqdn, zone):
                     self.log.debug("Skip: FQDN=%s on zone %s", fqdn, zone.name)
                     continue
-                name = zone.hostname_from_fqdn(fqdn)
-                rr = ResourceRecord(name, record_type, ip_address.compressed)
+                rr = ResourceRecord(fqdn, record_type, ip_address.compressed)
                 self.log.debug(
                     "Created %s record %s for zone %s", record_type, rr, zone.name
                 )

@@ -164,6 +164,10 @@ IPS = (
     Ip("192.0.5.1/24", "tagged-dns.example.org", tags=("dns",)),
     Ip("192.0.5.2/24", "tagged-dns-external.example.org", tags=("dns", "external")),
     Ip("192.0.5.3/24", "untagged.example.org"),
+    # Forward zone example.net.: names whose first label ends in "example-net",
+    # which matches the zone name when "." matches any character.
+    Ip("192.0.6.1/24", "web-example-net.example.net"),
+    Ip("192.0.6.2/24", "example-net.example.net"),
 )
 
 

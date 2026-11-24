@@ -88,6 +88,13 @@ class TestFromAddressIPv4:
             == "0/26.0.192.in-addr.arpa."
         )
 
+    def test_from_address_ipv4_host_zone_is_the_apex(self):
+        zone = Zone("1.2.0.192.in-addr.arpa.", [])
+        assert (
+            from_address(zone, ipaddress.IPv4Address("192.0.2.1"))
+            == "1.2.0.192.in-addr.arpa."
+        )
+
     def test_from_address_ipv4_octet_boundary(self):
         zone_1 = Zone("10.in-addr.arpa.", [])
         assert (
