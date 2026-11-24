@@ -45,6 +45,11 @@ dev = [
   "requests-mock>=1.12.0",
   "ruff>=0.17.6"
 ]
+# The tools that CI and the release workflow run on the built files.
+release = [
+  "packaging>=26.4",
+  "twine>=7.0.0"
+]
 
 [tool.coverage.coverage_conditional_plugin.rules]
 # The source uses octoDNS's Rrset when it exists (1.22 and later) and Rr
