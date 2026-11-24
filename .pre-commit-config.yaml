@@ -1,9 +1,4 @@
 repos:
-- repo: https://github.com/Lucas-C/pre-commit-hooks
-  rev: v1.5.6
-  hooks:
-  - id: forbid-tabs
-  - id: remove-tabs
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v6.0.0
   hooks:
@@ -34,10 +29,3 @@ repos:
     files: octodns_netbox
     args: [--ignore-missing-imports, --pretty]
     additional_dependencies: [types-requests]
-- repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  rev: v2.16.0
-  hooks:
-  - id: pretty-format-yaml
-    args: [--autofix]
-  - id: pretty-format-toml
-    args: [--autofix]
