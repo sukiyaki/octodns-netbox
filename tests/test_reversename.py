@@ -1,4 +1,5 @@
 import ipaddress
+import re
 
 import pytest
 from octodns.zone import Zone
@@ -24,6 +25,24 @@ class TestToNetworkIPv4:
 
         zone_3 = Zone("30.20.10.in-addr.arpa.", [])
         assert to_network(zone_3) == ipaddress.IPv4Network("10.20.30.0/24")
+
+    def test_to_network_ipv4_host_zone(self):
+        zone = Zone("1.2.0.192.in-addr.arpa.", [])
+        assert to_network(zone) == ipaddress.IPv4Network("192.0.2.1/32")
+
+    @pytest.mark.parametrize(
+        ("name", "message"),
+        [
+            ("1.300.in-addr.arpa.", "Octet 300 (> 255) not permitted"),
+            ("5.4.3.2.1.in-addr.arpa.", "Expected 4 octets"),
+            ("1/26.2.0.192.in-addr.arpa.", "has host bits set"),
+        ],
+    )
+    def test_to_network_ipv4_fails_on_a_network_that_ipaddress_rejects(
+        self, name, message
+    ):
+        with pytest.raises(ValueError, match=re.escape(message)):
+            to_network(Zone(name, []))
 
     def test_to_network_fails_due_to_invalid_zone(self):
         zone_invalid_1 = Zone("300.10.in-addr.arpa.", [])
