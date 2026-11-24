@@ -1,0 +1,12 @@
+---
+? ''
+: ttl: 60
+  type: A
+  value: 192.0.4.4
+description-host2:
+- ttl: 60
+  type: A
+  value: 192.0.4.2
+- ttl: 60
+  type: AAAA
+  value: 2001:db8::1:2

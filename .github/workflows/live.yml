@@ -1,0 +1,67 @@
+name: live
+
+on:
+  pull_request:
+  schedule:
+  # Weekly, to catch changes on the NetBox side.
+  - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    # The row name, not the Python version, names the check, so a ruleset can
+    # require it across Python upgrades.
+    name: live (${{ matrix.row }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - row: netbox-4.0-token-v1
+          netbox: '4.0'
+          python: '3.14'
+          token: 1
+          lowest: false
+        - row: netbox-4.0-token-v1-lowest
+          netbox: '4.0'
+          python: '3.10'
+          token: 1
+          lowest: true
+        - row: netbox-4.7-token-v1
+          netbox: '4.7'
+          python: '3.10'
+          token: 1
+          lowest: false
+        - row: netbox-4.7-token-v2
+          netbox: '4.7'
+          python: '3.14'
+          token: 2
+          lowest: false
+        - row: netbox-4.7-token-v2-lowest
+          netbox: '4.7'
+          python: '3.10'
+          token: 2
+          lowest: true
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      with:
+        python-version: ${{ matrix.python }}
+    - name: Resolve direct dependencies at their lower bounds
+      if: matrix.lowest
+      run: echo UV_RESOLUTION=lowest-direct >> "$GITHUB_ENV"
+    # The lowest rows resolve their own versions, so uv.lock cannot apply.
+    - run: >-
+        uv run ${{ !matrix.lowest && '--locked' || '' }} tests/live/run.py
+        --netbox ${{ matrix.netbox }}
+        --token-version ${{ matrix.token }}
+        --output-dir live-output
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      if: always()
+      with:
+        name: live-${{ matrix.row }}
+        path: live-output/

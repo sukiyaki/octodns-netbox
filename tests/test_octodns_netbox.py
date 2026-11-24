@@ -1129,3 +1129,40 @@ class TestNetboxSourcePopulateNormal:
 
         assert "Skipping subzone record" in caplog.text
         assert len(zone.records) == 6
+
+    def test_populate_skips_fqdn_that_only_shares_the_zone_suffix(self, mock_requests):
+        # https://github.com/sukiyaki/octodns-netbox/issues/78
+        mock_requests.get(
+            "http://netbox.example.com/api/ipam/ip-addresses/?description__ic=test.example.com&limit=0",
+            complete_qs=True,
+            json={
+                "count": 2,
+                "next": None,
+                "previous": None,
+                "results": [
+                    {
+                        "id": 1,
+                        "address": "192.0.4.7/24",
+                        "description": "a-test.example.com",
+                    },
+                    {
+                        "id": 2,
+                        "address": "192.0.4.8/24",
+                        "description": "host.test.example.com",
+                    },
+                ],
+            },
+        )
+        zone = Zone("test.example.com.", [])
+        source = NetboxSource(
+            "test", url="http://netbox.example.com/", token="testtoken"
+        )
+        source.populate(zone)
+
+        expected = Zone("test.example.com.", [])
+        expected.add_record(
+            Record.new(
+                expected, "host", {"type": "A", "ttl": 60, "values": ["192.0.4.8"]}
+            )
+        )
+        assert expected.changes(zone, SimpleProvider()) == []

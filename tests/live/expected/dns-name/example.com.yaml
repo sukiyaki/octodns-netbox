@@ -1,0 +1,94 @@
+---
+? ''
+: ttl: 60
+  type: AAAA
+  value: 2001:db8::1:7
+a-test:
+  ttl: 60
+  type: A
+  value: 192.0.4.7
+dnsname-192-0-2-1:
+  ttl: 60
+  type: A
+  value: 192.0.2.1
+dnsname-192-0-2-2:
+  ttl: 60
+  type: A
+  value: 192.0.2.2
+dnsname-192-0-2-3:
+  ttl: 60
+  type: A
+  value: 192.0.2.3
+dnsname-192-0-2-65:
+  ttl: 60
+  type: A
+  value: 192.0.2.65
+dnsname-192-0-3-1:
+  ttl: 60
+  type: A
+  value: 192.0.3.1
+dnsname-2001-0db8-2:
+  ttl: 60
+  type: AAAA
+  value: 2001:db8::2
+dnsname-2001-0db8-3:
+  ttl: 60
+  type: AAAA
+  value: 2001:db8::3
+dnsname-2001-0db8-1000-1:
+  ttl: 60
+  type: AAAA
+  value: 2001:db8::1000:1
+dnsname-host1:
+- ttl: 60
+  type: A
+  value: 192.0.4.1
+- ttl: 60
+  type: AAAA
+  value: 2001:db8::1:1
+dnsname-host2.subdomain1:
+- ttl: 60
+  type: A
+  value: 192.0.4.2
+- ttl: 60
+  type: AAAA
+  value: 2001:db8::1:2
+dnsname-roundrobin:
+- ttl: 60
+  type: A
+  values:
+  - 192.0.4.5
+  - 192.0.4.6
+- ttl: 60
+  type: AAAA
+  values:
+  - 2001:db8::1:5
+  - 2001:db8::1:6
+dnsname-subdomain1:
+  ttl: 60
+  type: AAAA
+  value: 2001:db8::1:4
+host.test:
+  ttl: 60
+  type: A
+  value: 192.0.4.8
+subdomain1:
+  ttl: 60
+  type: A
+  value: 192.0.4.4
+vrf-mgmt-dnsname-192-0-2-1:
+  ttl: 60
+  type: A
+  value: 192.0.2.1
+vrf-mgmt-dnsname-192-0-2-2:
+  ttl: 60
+  type: A
+  value: 192.0.2.2
+vrf-mgmt-dnsname-192-0-2-3:
+  ttl: 60
+  type: A
+  value: 192.0.2.3
+vrf-mgmt-dnsname-192-0-3-2:
+  ttl: 60
+  type: A
+  value: 192.0.3.2

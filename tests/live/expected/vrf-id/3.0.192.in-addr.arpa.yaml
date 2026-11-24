@@ -1,0 +1,5 @@
+---
+'2':
+  ttl: 60
+  type: PTR
+  value: vrf-mgmt-description-192-0-3-2.example.com.

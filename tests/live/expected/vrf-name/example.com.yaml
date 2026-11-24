@@ -1,0 +1,17 @@
+---
+vrf-mgmt-description-192-0-2-1:
+  ttl: 60
+  type: A
+  value: 192.0.2.1
+vrf-mgmt-description-192-0-2-2:
+  ttl: 60
+  type: A
+  value: 192.0.2.2
+vrf-mgmt-description-192-0-2-3:
+  ttl: 60
+  type: A
+  value: 192.0.2.3
+vrf-mgmt-description-192-0-3-2:
+  ttl: 60
+  type: A
+  value: 192.0.3.2
