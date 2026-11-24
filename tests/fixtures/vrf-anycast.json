@@ -1,0 +1,285 @@
+{
+  "source": {
+    "url": "http://netbox.example.com"
+  },
+  "init": [],
+  "zones": {
+    "10.0.192.in-addr.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=192.0.10.0%2F24&family=4&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 7,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 51,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/51/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/51/",
+                  "display": "192.0.10.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.10.1/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": {
+                    "value": "anycast",
+                    "label": "Anycast"
+                  },
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "anycast-10-1-a.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 52,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/52/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/52/",
+                  "display": "192.0.10.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.10.1/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": {
+                    "value": "anycast",
+                    "label": "Anycast"
+                  },
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "anycast-10-1-b.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 53,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/53/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/53/",
+                  "display": "192.0.10.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.10.1/24",
+                  "vrf": {
+                    "id": 2,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/2/",
+                    "display": "anycast",
+                    "name": "anycast",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": {
+                    "value": "anycast",
+                    "label": "Anycast"
+                  },
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "anycast-10-1-a.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 54,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/54/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/54/",
+                  "display": "192.0.10.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.10.1/24",
+                  "vrf": {
+                    "id": 2,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/2/",
+                    "display": "anycast",
+                    "name": "anycast",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": {
+                    "value": "anycast",
+                    "label": "Anycast"
+                  },
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "anycast-10-1-b.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 55,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/55/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/55/",
+                  "display": "192.0.10.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.10.2/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": {
+                    "value": "anycast",
+                    "label": "Anycast"
+                  },
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "anycast-10-2-a.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 56,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/56/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/56/",
+                  "display": "192.0.10.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.10.2/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": {
+                    "value": "anycast",
+                    "label": "Anycast"
+                  },
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "anycast-10-2-b.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 57,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/57/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/57/",
+                  "display": "192.0.10.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.10.2/24",
+                  "vrf": {
+                    "id": 2,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/2/",
+                    "display": "anycast",
+                    "name": "anycast",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "vrf-anycast-10-2.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

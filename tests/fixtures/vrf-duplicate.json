@@ -1,0 +1,243 @@
+{
+  "source": {
+    "url": "http://netbox.example.com"
+  },
+  "init": [],
+  "zones": {
+    "7.0.192.in-addr.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=192.0.7.0%2F24&family=4&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 6,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 42,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/42/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/42/",
+                  "display": "192.0.7.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.7.1/24",
+                  "vrf": {
+                    "id": 2,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/2/",
+                    "display": "anycast",
+                    "name": "anycast",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "anycast-1-a.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 43,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/43/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/43/",
+                  "display": "192.0.7.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.7.1/24",
+                  "vrf": {
+                    "id": 2,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/2/",
+                    "display": "anycast",
+                    "name": "anycast",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "anycast-1-b.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 44,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/44/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/44/",
+                  "display": "192.0.7.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.7.2/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "shared-2.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 45,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/45/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/45/",
+                  "display": "192.0.7.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.7.2/24",
+                  "vrf": {
+                    "id": 2,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/2/",
+                    "display": "anycast",
+                    "name": "anycast",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "shared-2.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 46,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/46/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/46/",
+                  "display": "192.0.7.3/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.7.3/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "global-3.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 47,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/47/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/47/",
+                  "display": "192.0.7.3/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.7.3/24",
+                  "vrf": {
+                    "id": 2,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/2/",
+                    "display": "anycast",
+                    "name": "anycast",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "anycast-3.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

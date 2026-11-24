@@ -1,0 +1,19 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  values:
+  - anycast-1-a.example.
+  - anycast-1-b.example.
+'2':
+  ttl: 60
+  type: PTR
+  values:
+  - shared-2.example.
+  - shared-2.example.
+'3':
+  ttl: 60
+  type: PTR
+  values:
+  - anycast-3.example.
+  - global-3.example.

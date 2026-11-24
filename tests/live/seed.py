@@ -13,6 +13,8 @@ from typing import Any
 import requests
 
 MGMT_VRF = "mgmt"
+# A VRF that allows the same address twice, as anycast addresses need.
+ANYCAST_VRF = "anycast"
 TAGS = ("dns", "external")
 
 PERF_FORWARD_ZONE = "perf.example.net."
@@ -28,6 +30,9 @@ class Ip:
     dns_name: str = ""
     vrf: str | None = None
     tags: tuple[str, ...] = ()
+    # NetBox lets IP addresses share an address, even where the VRF enforces
+    # uniqueness, when each of them has a role such as "anycast".
+    role: str | None = None
 
 
 IPS = (
@@ -181,10 +186,30 @@ IPS = (
     Ip("203.0.113.2/24", "xn--hst-sna.xn--caf-dma.example"),
     Ip("203.0.113.3/24", "ok.xn--caf-dma.example"),
     Ip("203.0.113.4/24", "a\u200db.xn--caf-dma.example"),
+    # Zone 7.0.192.in-addr.arpa.: one address in two rows of one VRF, one
+    # address with the same name in two VRFs, and one with two names in two.
+    Ip("192.0.7.1/24", "anycast-1-a.example", vrf=ANYCAST_VRF),
+    Ip("192.0.7.1/24", "anycast-1-b.example", vrf=ANYCAST_VRF),
+    Ip("192.0.7.2/24", "shared-2.example"),
+    Ip("192.0.7.2/24", "shared-2.example", vrf=ANYCAST_VRF),
+    Ip("192.0.7.3/24", "global-3.example"),
+    Ip("192.0.7.3/24", "anycast-3.example", vrf=ANYCAST_VRF),
     # Zones ex_ample.com. and 8.0.192.in-addr.arpa.: a label that is not ASCII
     # in a zone with an underscore. IDNA does not allow "_", so a conversion of
     # the whole name fails, and a conversion of each label does not.
     Ip("192.0.8.1/24", "höst.ex_ample.com"),
+    # Zone 10.0.192.in-addr.arpa.: anycast addresses that give a PTR record
+    # more than one name from one VRF. 192.0.10.1 has the same two names in
+    # the Global VRF and in VRF anycast. 192.0.10.2 has two names in the
+    # Global VRF and a third in VRF anycast. VRF mgmt stays out, because the
+    # vrf-name fixture holds its count of IP addresses.
+    Ip("192.0.10.1/24", "anycast-10-1-a.example", role="anycast"),
+    Ip("192.0.10.1/24", "anycast-10-1-b.example", role="anycast"),
+    Ip("192.0.10.1/24", "anycast-10-1-a.example", vrf=ANYCAST_VRF, role="anycast"),
+    Ip("192.0.10.1/24", "anycast-10-1-b.example", vrf=ANYCAST_VRF, role="anycast"),
+    Ip("192.0.10.2/24", "anycast-10-2-a.example", role="anycast"),
+    Ip("192.0.10.2/24", "anycast-10-2-b.example", role="anycast"),
+    Ip("192.0.10.2/24", "vrf-anycast-10-2.example", vrf=ANYCAST_VRF),
     # Zones idn-case.example. and 11.0.192.in-addr.arpa.: names whose letters
     # change when they become lower case. Python's str.lower() turns a capital
     # sigma after a letter into the final sigma ς unless a letter comes next,
@@ -254,7 +279,8 @@ def seed(netbox: NetBox) -> dict[str, int]:
     """Create the VRF, tags and addresses. Returns VRF IDs by name."""
     vrf = netbox.post("ipam/vrfs/", {"name": MGMT_VRF})
     netbox.post("extras/tags/", [{"name": tag, "slug": tag} for tag in TAGS])
-    vrf_ids = {MGMT_VRF: vrf["id"]}
+    anycast = netbox.post("ipam/vrfs/", {"name": ANYCAST_VRF, "enforce_unique": False})
+    vrf_ids = {MGMT_VRF: vrf["id"], ANYCAST_VRF: anycast["id"]}
     netbox.post(
         "ipam/ip-addresses/",
         [
@@ -264,6 +290,7 @@ def seed(netbox: NetBox) -> dict[str, int]:
                 "dns_name": ip.dns_name,
                 "vrf": vrf_ids[ip.vrf] if ip.vrf else None,
                 "tags": [{"slug": tag} for tag in ip.tags],
+                **({"role": ip.role} if ip.role else {}),
             }
             for ip in IPS
         ],

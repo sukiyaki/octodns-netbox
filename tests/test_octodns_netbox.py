@@ -207,6 +207,45 @@ def source_warnings(caplog):
     ]
 
 
+def test_populate_warns_about_an_address_whose_ptr_has_values_from_two_vrfs(caplog):
+    case = load_case("description")
+    populate(connect(case), case, "2.0.192.in-addr.arpa.")
+    assert source_warnings(caplog) == [
+        f"PTR {host}.2.0.192.in-addr.arpa. gets a value from each of 2 NetBox IP "
+        f"addresses for 192.0.2.{host}, in VRFs Global, mgmt. Set populate_vrf_id "
+        "or populate_vrf_name to read one VRF."
+        for host in (1, 2, 3)
+    ]
+
+
+def test_populate_warns_only_about_different_values_from_different_vrfs(caplog):
+    case = load_case("vrf-duplicate")
+    populate(connect(case), case, "7.0.192.in-addr.arpa.")
+    # 192.0.7.1 has two names in one VRF, and 192.0.7.2 one name in two VRFs.
+    assert source_warnings(caplog) == [
+        "PTR 3.7.0.192.in-addr.arpa. gets a value from each of 2 NetBox IP "
+        "addresses for 192.0.7.3, in VRFs Global, anycast. Set populate_vrf_id "
+        "or populate_vrf_name to read one VRF."
+    ]
+
+
+def test_populate_does_not_warn_about_vrfs_when_one_vrf_gives_two_values(caplog):
+    case = load_case("vrf-anycast")
+    populate(connect(case), case, "10.0.192.in-addr.arpa.")
+    # Each VRF gives 192.0.10.1 two names, and the Global VRF gives 192.0.10.2
+    # two names. Reading the Global VRF would still give each PTR two values.
+    assert source_warnings(caplog) == []
+
+
+@pytest.mark.parametrize("name", ["multivalue-ptr", "vrf-id", "vrf-global-name"])
+def test_populate_does_not_warn_about_vrfs_with_multivalue_ptr_or_one_vrf(caplog, name):
+    case = load_case(name)
+    source = connect(case)
+    for zone_name in case["zones"]:
+        populate(source, case, zone_name)
+    assert source_warnings(caplog) == []
+
+
 def test_init_fails_when_populate_vrf_name_is_not_in_netbox():
     case = load_case("vrf-name-not-found")
     assert [e["response"]["json"]["count"] for e in case["init"]] == [0]

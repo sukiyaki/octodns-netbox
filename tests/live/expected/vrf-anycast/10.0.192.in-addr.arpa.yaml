@@ -1,0 +1,16 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  values:
+  - anycast-10-1-a.example.
+  - anycast-10-1-a.example.
+  - anycast-10-1-b.example.
+  - anycast-10-1-b.example.
+'2':
+  ttl: 60
+  type: PTR
+  values:
+  - anycast-10-2-a.example.
+  - anycast-10-2-b.example.
+  - vrf-anycast-10-2.example.

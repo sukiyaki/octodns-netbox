@@ -203,6 +203,13 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
             }
         )
         records: list[ResourceRecord] = []
+        # The VRF, as (ID, name), and the first value of each NetBox IP
+        # address that gave a value, by PTR name and address.
+        sources: dict[
+            tuple[str, IPv4Address | IPv6Address],
+            list[tuple[tuple[int | None, str], str]],
+        ]
+        sources = defaultdict(list)
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
             ptr_name = reversename.from_address(zone, ip_address)
@@ -214,6 +221,30 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 rr = ResourceRecord(ptr_name, "PTR", fqdn)
                 self.log.debug("Adding PTR record %s to zone %s", rr, zone.name)
                 records.append(rr)
+            if fqdns:
+                nb_vrf = ipam_record.vrf
+                vrf = (nb_vrf.id, nb_vrf.name) if nb_vrf else (None, "Global")
+                sources[(ptr_name, ip_address)].append((vrf, fqdns[0]))
+        if not self.config.multivalue_ptr:
+            for (ptr_name, ip_address), values in sources.items():
+                names_by_vrf: dict[tuple[int | None, str], set[str]]
+                names_by_vrf = defaultdict(set)
+                for vrf, fqdn in values:
+                    names_by_vrf[vrf].add(fqdn)
+                # Reading one VRF gives the PTR one value only when each VRF
+                # gives one name. A VRF that gives two by itself, as anycast
+                # addresses can, keeps two whichever VRF the source reads.
+                one_name_each = all(len(n) == 1 for n in names_by_vrf.values())
+                if one_name_each and len({fqdn for _, fqdn in values}) > 1:
+                    self.log.warning(
+                        "PTR %s gets a value from each of %d NetBox IP addresses "
+                        "for %s, in VRFs %s. Set populate_vrf_id or "
+                        "populate_vrf_name to read one VRF.",
+                        ptr_name,
+                        len(values),
+                        ip_address,
+                        ", ".join(name for _, name in names_by_vrf),
+                    )
         return records
 
     def _forward_records(self, zone: Zone) -> list[ResourceRecord]:
