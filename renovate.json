@@ -1,9 +1,135 @@
 {
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
     "extends": [
-        "config:recommended"
+        "config:recommended",
+        "helpers:pinGitHubActionDigestsToSemver"
     ],
-    "pre-commit": {
-        "enabled": true
-    }
+    "ignorePaths": [],
+    "lockFileMaintenance": {
+        "enabled": true,
+        "schedule": [
+            "before 4am on monday"
+        ]
+    },
+    "customManagers": [
+        {
+            "customType": "regex",
+            "description": "The NetBox image tags that tests/live/run.py passes to tests/live/compose.yaml. A tag is v<NetBox>-<netbox-docker>; the versioning compares the NetBox version and the netbox-docker major and minor.",
+            "managerFilePatterns": [
+                "/^tests/live/run\\.py$/"
+            ],
+            "matchStrings": [
+                "\"\\d+\\.\\d+\": \"(?<currentValue>v\\d+\\.\\d+\\.\\d+-\\d+\\.\\d+\\.\\d+)\""
+            ],
+            "datasourceTemplate": "docker",
+            "depNameTemplate": "netboxcommunity/netbox",
+            "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>\\d+)\\.(?<revision>\\d+)\\.\\d+$"
+        },
+        {
+            "customType": "regex",
+            "description": "The build backend pins in tool.uv.build-constraint-dependencies of pyproject.toml, which the pep621 manager does not read.",
+            "managerFilePatterns": [
+                "/^pyproject\\.toml$/"
+            ],
+            "matchStringsStrategy": "recursive",
+            "matchStrings": [
+                "build-constraint-dependencies = \\[[^\\]]*\\]",
+                "\"(?<depName>[A-Za-z0-9._-]+)==(?<currentValue>[^\"]+)\""
+            ],
+            "datasourceTemplate": "pypi",
+            "versioningTemplate": "pep440"
+        }
+    ],
+    "packageRules": [
+        {
+            "description": "Runtime dependencies reach every user of the package, so a person reviews each one.",
+            "matchManagers": [
+                "pep621"
+            ],
+            "matchDepTypes": [
+                "project.dependencies"
+            ],
+            "rangeStrategy": "widen",
+            "automerge": false
+        },
+        {
+            "description": "Dev dependencies, including the lint tools pre-commit runs. Their lower bounds stay, and uv.lock takes the new version.",
+            "matchManagers": [
+                "pep621"
+            ],
+            "matchDepTypes": [
+                "dependency-groups"
+            ],
+            "groupName": "dev dependencies",
+            "rangeStrategy": "update-lockfile"
+        },
+        {
+            "matchManagers": [
+                "pep621"
+            ],
+            "matchDepTypes": [
+                "dependency-groups"
+            ],
+            "matchUpdateTypes": [
+                "minor",
+                "patch"
+            ],
+            "automerge": true
+        },
+        {
+            "matchManagers": [
+                "github-actions"
+            ],
+            "groupName": "GitHub Actions"
+        },
+        {
+            "matchManagers": [
+                "github-actions"
+            ],
+            "matchUpdateTypes": [
+                "minor",
+                "patch"
+            ],
+            "automerge": true
+        },
+        {
+            "description": "uv.lock records the build backend pins, and Renovate cannot run uv lock for a custom manager. Each update waits for approval on the Dependency Dashboard, and its pull request needs uv lock before CI passes.",
+            "matchManagers": [
+                "custom.regex"
+            ],
+            "matchDatasources": [
+                "pypi"
+            ],
+            "groupName": "build backend",
+            "dependencyDashboardApproval": true,
+            "automerge": false,
+            "prBodyNotes": [
+                "Run `uv lock` on this branch and push the result. Until then, every `uv run --locked` step fails with \"The lockfile needs to be updated\"."
+            ]
+        },
+        {
+            "description": "A NetBox update must pass the live tests and may need the unit-test fixtures recorded again, so it never automerges. A new NetBox minor also changes the rows in run.py and live.yml, so it waits for approval on the Dependency Dashboard.",
+            "matchDatasources": [
+                "docker"
+            ],
+            "matchPackageNames": [
+                "netboxcommunity/netbox"
+            ],
+            "separateMinorPatch": true,
+            "automerge": false
+        },
+        {
+            "matchDatasources": [
+                "docker"
+            ],
+            "matchPackageNames": [
+                "netboxcommunity/netbox"
+            ],
+            "matchUpdateTypes": [
+                "major",
+                "minor"
+            ],
+            "dependencyDashboardApproval": true
+        }
+    ]
 }

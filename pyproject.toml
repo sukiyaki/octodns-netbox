@@ -116,9 +116,14 @@ select = ["E4", "E7", "E9", "F", "I", "UP", "B", "G", "RUF", "SIM", "BLE001", "C
 "tests/test_octodns_netbox.py" = ["RUF001", "RUF003"]
 
 [tool.uv]
+# uv.lock is written by uv 0.13.9 (lock revision 5). An older uv stops here
+# instead of rewriting it. setup-uv in CI reads this and installs the newest
+# uv that satisfies it.
+required-version = ">=0.13.9"
 # uv build installs the build backend in a separate environment, which
 # uv.lock does not cover. These pins fix each package there, and uv.lock
-# records them.
+# records them. Renovate lists updates on the Dependency Dashboard; see
+# CONTRIBUTING.md.
 build-constraint-dependencies = [
   "hatch-vcs==0.5.0",
   "hatchling==1.33.0",
