@@ -9,11 +9,12 @@ import logging
 import re
 from collections import defaultdict
 from collections.abc import Iterable
-from ipaddress import ip_interface
+from ipaddress import IPv4Address, IPv6Address, ip_interface
 from typing import Any, Literal, NamedTuple, cast
 
 import pynetbox
 import requests
+from octodns.idna import IdnaError, idna_encode
 from octodns.record import Record
 from octodns.source.base import BaseSource
 from octodns.zone import SubzoneRecordException, Zone
@@ -205,9 +206,10 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
             ptr_name = reversename.from_address(zone, ip_address)
-            fqdns = _fqdns(ipam_record[field_name])
+            names = _names(ipam_record[field_name])
             if not self.config.multivalue_ptr:
-                fqdns = fqdns[:1]
+                names = names[:1]
+            fqdns = self._octodns_fqdns(names, ip_address, zone)
             for fqdn in fqdns:
                 rr = ResourceRecord(ptr_name, "PTR", fqdn)
                 self.log.debug("Adding PTR record %s to zone %s", rr, zone.name)
@@ -221,7 +223,8 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
             record_type = "A" if ip_address.version == 4 else "AAAA"
-            for fqdn in _fqdns(ipam_record[field_name]):
+            names = _names(ipam_record[field_name])
+            for fqdn in self._octodns_fqdns(names, ip_address, zone):
                 if not self._fqdn_in_zone(fqdn, zone):
                     self.log.debug("Skip: FQDN=%s on zone %s", fqdn, zone.name)
                     continue
@@ -232,6 +235,37 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 records.append(rr)
         return records
 
+    def _octodns_fqdns(
+        self, names: list[str], ip_address: IPv4Address | IPv6Address, zone: Zone
+    ) -> list[str]:
+        """The names as octoDNS spells zone and record names.
+
+        That is lower case, with each label that is not ASCII in IDNA form:
+        höst.example. becomes xn--hst-sna.example. A name with a label that has
+        no IDNA form is left out, with a warning.
+        """
+        fqdns: list[str] = []
+        for name in names:
+            try:
+                # Lower case for the whole name first, as octoDNS does.
+                # str.lower() turns a capital sigma at the end of a label into
+                # a small sigma when the next label starts with a letter, and
+                # into a final sigma in a label on its own. Then label by
+                # label, as octoDNS 1.13 and later do. octoDNS 1.10 to 1.12
+                # convert the whole name, and IDNA rejects the "_" in an ASCII
+                # label such as ex_ample.
+                labels = name.lower().split(".")
+                fqdns.append(".".join(idna_encode(label) for label in labels))
+            except IdnaError as error:
+                self.log.warning(
+                    "Skipping the name %r of %s in zone %s: %s",
+                    name,
+                    ip_address,
+                    zone.name,
+                    error,
+                )
+        return fqdns
+
     def _fqdn_in_zone(self, fqdn: str, zone: Zone) -> bool:
         if fqdn == zone.name:
             return True
@@ -241,6 +275,6 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
         return False
 
 
-def _fqdns(field_value: str) -> list[str]:
+def _names(field_value: str) -> list[str]:
     names = (name.strip() for name in field_value.split(","))
     return [name if name.endswith(".") else f"{name}." for name in names if name]

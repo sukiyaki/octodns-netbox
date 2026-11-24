@@ -168,6 +168,40 @@ IPS = (
     # which matches the zone name when "." matches any character.
     Ip("192.0.6.1/24", "web-example-net.example.net"),
     Ip("192.0.6.2/24", "example-net.example.net"),
+    # Zones example.test. and 100.51.198.in-addr.arpa.: upper-case names.
+    # NetBox stores dns_name in lower case, and description as written.
+    Ip("198.51.100.1/24", "Host1.Example.TEST"),
+    Ip("198.51.100.2/24", "Host2.example.test"),
+    # Zones café.example. and 113.0.203.in-addr.arpa.: internationalized names.
+    # octoDNS spells café.example. as xn--caf-dma.example., and the query
+    # matches only names that spell the zone that way, in any case. The first
+    # two are one name, xn--hst-sna.xn--caf-dma.example. The last has no IDNA
+    # form, because IDNA allows U+200D only in a few scripts.
+    Ip("203.0.113.1/24", "höst.XN--CAF-DMA.EXAMPLE"),
+    Ip("203.0.113.2/24", "xn--hst-sna.xn--caf-dma.example"),
+    Ip("203.0.113.3/24", "ok.xn--caf-dma.example"),
+    Ip("203.0.113.4/24", "a\u200db.xn--caf-dma.example"),
+    # Zones ex_ample.com. and 8.0.192.in-addr.arpa.: a label that is not ASCII
+    # in a zone with an underscore. IDNA does not allow "_", so a conversion of
+    # the whole name fails, and a conversion of each label does not.
+    Ip("192.0.8.1/24", "höst.ex_ample.com"),
+    # Zones idn-case.example. and 11.0.192.in-addr.arpa.: names whose letters
+    # change when they become lower case. Python's str.lower() turns a capital
+    # sigma after a letter into the final sigma ς unless a letter comes next,
+    # and it looks past a dot: ΑΣ alone becomes ας, and ΑΣ.α becomes ασ.α.
+    Ip("192.0.11.1/24", "ΑΣ.α.idn-case.example"),
+    Ip("192.0.11.2/24", "ΑΣ.idn-case.example"),
+    Ip("192.0.11.3/24", "α.Σ.1.idn-case.example"),
+    Ip("192.0.11.4/24", "ΑΣ.1.idn-case.example"),
+    Ip("192.0.11.5/24", "ας.idn-case.example"),
+    Ip("192.0.11.6/24", "ΑΣ.café.idn-case.example"),
+    Ip("192.0.11.7/24", "東京.ΑΣ.idn-case.example"),
+    Ip("192.0.11.8/24", "ΤΕΣΤ-テスト.idn-case.example"),
+    Ip("192.0.11.9/24", "Straße.idn-case.example"),
+    Ip("192.0.11.10/24", "STRAẞE.idn-case.example"),
+    Ip("192.0.11.11/24", "İstanbul.idn-case.example"),
+    Ip("192.0.11.12/24", "ıspanak.idn-case.example"),
+    Ip("192.0.11.13/24", "DİYARBAKIR.idn-case.example"),
 )
 
 

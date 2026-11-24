@@ -1,0 +1,53 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  value: xn--mxa0b.xn--mxa.idn-case.example.
+'2':
+  ttl: 60
+  type: PTR
+  value: xn--mxa0b.idn-case.example.
+'3':
+  ttl: 60
+  type: PTR
+  value: xn--mxa.xn--3xa.1.idn-case.example.
+'4':
+  ttl: 60
+  type: PTR
+  value: xn--mxa8a.1.idn-case.example.
+'5':
+  ttl: 60
+  type: PTR
+  value: xn--mxa8a.idn-case.example.
+'6':
+  ttl: 60
+  type: PTR
+  value: xn--mxa0b.xn--caf-dma.idn-case.example.
+'7':
+  ttl: 60
+  type: PTR
+  value: xn--1lqs71d.xn--mxa0b.idn-case.example.
+'8':
+  ttl: 60
+  type: PTR
+  value: xn----6lb6bcc9610eucara.idn-case.example.
+'9':
+  ttl: 60
+  type: PTR
+  value: xn--strae-oqa.idn-case.example.
+'10':
+  ttl: 60
+  type: PTR
+  value: xn--strae-oqa.idn-case.example.
+'11':
+  ttl: 60
+  type: PTR
+  value: xn--istanbul-o0e.idn-case.example.
+'12':
+  ttl: 60
+  type: PTR
+  value: xn--spanak-o9a.idn-case.example.
+'13':
+  ttl: 60
+  type: PTR
+  value: xn--diyarbakir-o2f.idn-case.example.

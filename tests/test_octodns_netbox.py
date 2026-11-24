@@ -9,6 +9,7 @@ run must dump for it, so the replay and the live run check the same zones.
 import json
 import logging
 from contextlib import contextmanager
+from ipaddress import ip_interface
 from pathlib import Path
 
 import pytest
@@ -198,6 +199,14 @@ def test_populate_returns_the_zones_the_live_run_dumps(name):
     assert_populates_expected_zones(connect(case), case, name)
 
 
+def source_warnings(caplog):
+    return [
+        r.getMessage()
+        for r in caplog.records
+        if r.levelno >= logging.WARNING and r.name.startswith("NetboxSource")
+    ]
+
+
 def test_init_fails_when_populate_vrf_name_is_not_in_netbox():
     case = load_case("vrf-name-not-found")
     assert [e["response"]["json"]["count"] for e in case["init"]] == [0]
@@ -223,3 +232,60 @@ def test_populate_skips_fqdn_that_only_shares_the_zone_suffix():
     assert returned == {"a-test.example.com", "host.test.example.com"}
     zone = populate(connect(case), case, "test.example.com.")
     assert {(record.name, record._type) for record in zone.records} == {("host", "A")}
+
+
+def test_populate_skips_a_name_without_an_idna_form_with_a_warning(caplog):
+    case = load_case("idn")
+    source = connect(case)
+    for zone_name in case["zones"]:
+        populate(source, case, zone_name)
+    skipped = "Skipping the name 'a\\u200db.xn--caf-dma.example.' of 203.0.113.4"
+    warnings = source_warnings(caplog)
+    assert len(warnings) == 2
+    assert all(warning.startswith(skipped) for warning in warnings)
+
+
+# Each description of the idn-case case, and the name that 0.5.0 gave its PTR
+# record on octoDNS 1.10.0, 1.12.0, 1.13.0, and 1.22.0 alike. With one
+# description at a time, 0.5.0 gave the A record the same name, except where a
+# comment says otherwise. With all of them, 0.5.0 stopped the forward zone,
+# because Straße and STRAẞE gave two records of one name, as did ΑΣ and ας.
+IDN_CASE = [
+    ("ΑΣ.α.idn-case.example", "xn--mxa0b.xn--mxa.idn-case.example."),
+    # 0.5.0 lower-cased ΑΣ without the zone name for the A record, and got ας,
+    # xn--mxa8a. The PTR record pointed to ασ, a name without an A record.
+    ("ΑΣ.idn-case.example", "xn--mxa0b.idn-case.example."),
+    ("α.Σ.1.idn-case.example", "xn--mxa.xn--3xa.1.idn-case.example."),
+    ("ΑΣ.1.idn-case.example", "xn--mxa8a.1.idn-case.example."),
+    ("ας.idn-case.example", "xn--mxa8a.idn-case.example."),
+    ("ΑΣ.café.idn-case.example", "xn--mxa0b.xn--caf-dma.idn-case.example."),
+    # The A record of 0.5.0 was xn--1lqs71d.xn--mxa8a, as for ΑΣ.idn-case.example.
+    ("東京.ΑΣ.idn-case.example", "xn--1lqs71d.xn--mxa0b.idn-case.example."),
+    ("ΤΕΣΤ-テスト.idn-case.example", "xn----6lb6bcc9610eucara.idn-case.example."),
+    ("Straße.idn-case.example", "xn--strae-oqa.idn-case.example."),
+    ("STRAẞE.idn-case.example", "xn--strae-oqa.idn-case.example."),
+    ("İstanbul.idn-case.example", "xn--istanbul-o0e.idn-case.example."),
+    ("ıspanak.idn-case.example", "xn--spanak-o9a.idn-case.example."),
+    ("DİYARBAKIR.idn-case.example", "xn--diyarbakir-o2f.idn-case.example."),
+]
+
+
+def test_populate_lower_cases_each_name_as_a_whole_as_0_5_0_did():
+    case = load_case("idn-case")
+    (exchange,) = case["zones"]["11.0.192.in-addr.arpa."]["exchanges"]
+    address = {
+        ip["description"]: ip_interface(ip["address"]).ip
+        for ip in exchange["response"]["json"]["results"]
+    }
+    assert sorted(address) == sorted(name for name, _ in IDN_CASE)
+    source = connect(case)
+    forward = populate(source, case, "idn-case.example.")
+    reverse = populate(source, case, "11.0.192.in-addr.arpa.")
+    a = {(record.fqdn, value) for record in forward.records for value in record.values}
+    assert a == {(fqdn, str(address[name])) for name, fqdn in IDN_CASE}
+    ptr = {
+        (record.fqdn, value) for record in reverse.records for value in record.values
+    }
+    assert ptr == {
+        (f"{address[name].reverse_pointer}.", fqdn) for name, fqdn in IDN_CASE
+    }

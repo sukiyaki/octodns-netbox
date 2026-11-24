@@ -102,6 +102,12 @@ target-version = "py311"
 # problem. Single codes would keep those rules out without anyone seeing them.
 select = ["E4", "E7", "E9", "F", "I", "UP", "B", "G", "RUF", "SIM", "BLE001", "C405"]
 
+[tool.ruff.lint.per-file-ignores]
+# These files hold host names with Greek and Turkish letters, such as α and ı,
+# that RUF001 and RUF003 report because they look like Latin letters.
+"tests/live/seed.py" = ["RUF001", "RUF003"]
+"tests/test_octodns_netbox.py" = ["RUF001", "RUF003"]
+
 [tool.uv]
 # uv build installs the build backend in a separate environment, which
 # uv.lock does not cover. These pins fix each package there, and uv.lock

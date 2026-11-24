@@ -1,0 +1,5 @@
+---
+höst:
+  ttl: 60
+  type: A
+  value: 192.0.8.1
