@@ -39,9 +39,11 @@ dev = [
   "coverage-conditional-plugin>=0.9.0",
   "mypy>=2.4.1",
   "pre-commit>=4.0.0",
+  "pre-commit-hooks>=6.0.0",
   "pytest>=9.0.0",
   "pytest-cov>=7.0.0",
-  "requests-mock>=1.12.0"
+  "requests-mock>=1.12.0",
+  "ruff>=0.17.6"
 ]
 
 [tool.coverage.coverage_conditional_plugin.rules]
@@ -97,7 +99,7 @@ target-version = "py311"
 # (UP), bugbear (B), logging calls (G), ruff's own rules (RUF), simplify (SIM),
 # and two more rules that ruff 0.17's wider default reported on this code.
 # A category takes every stable rule of that group in the ruff version that
-# .pre-commit-config.yaml pins. A new rule can arrive only with a ruff update,
+# uv.lock pins. A new rule can arrive only with a ruff update,
 # which Renovate opens as a PR, and lint fails in that PR if the rule finds a
 # problem. Single codes would keep those rules out without anyone seeing them.
 select = ["E4", "E7", "E9", "F", "I", "UP", "B", "G", "RUF", "SIM", "BLE001", "C405"]
