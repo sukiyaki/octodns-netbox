@@ -1,7 +1,8 @@
 """NetBox objects the live tests create before dumping zones.
 
-The addresses cover the same situations as tests/fixtures/*.json, merged into
-one consistent data set: in a real NetBox every query sees all of them.
+The addresses cover the situations the unit tests need in one consistent data
+set: in a real NetBox every query sees all of them. The unit-test fixtures in
+tests/fixtures/ are recorded from this data.
 """
 
 import ipaddress

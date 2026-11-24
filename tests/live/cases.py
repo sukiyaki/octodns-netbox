@@ -2,11 +2,12 @@
 
 Each case becomes one octoDNS config with a single NetboxSource. octoDNS treats
 a configured zone inside another configured zone as a sub-zone, so only the
-"subzones" case puts nested zones in the same config.
+"subzones" case puts nested zones in the same config. run.py records each case
+as tests/fixtures/<case>.json for the unit tests.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import seed
 
@@ -21,6 +22,8 @@ class Case:
     name: str
     zones: Tuple[str, ...]
     settings: Dict[str, Any] = field(default_factory=dict)
+    # Text of the ValueError the source must raise while the config loads.
+    init_error: Optional[str] = None
 
 
 def cases(vrf_ids: Dict[str, int]) -> List[Case]:
@@ -64,6 +67,15 @@ def cases(vrf_ids: Dict[str, int]) -> List[Case]:
         Case("tags", TAG_ZONES, {"populate_tags": ["dns"]}),
         Case("tags-two", TAG_ZONES, {"populate_tags": ["dns", "external"]}),
         Case("issue-78", ("test.example.com.",)),
+        Case("custom-ttl", TAG_ZONES, {"ttl": 120}),
+        # run.py sets NETBOX_API_URL to NETBOX_URL followed by "/api/".
+        Case("url-api-suffix", ("example.org.",), {"url": "env/NETBOX_API_URL"}),
+        Case(
+            "vrf-name-not-found",
+            (),
+            {"populate_vrf_name": "no-such-vrf"},
+            init_error="Failed to retrieve VRF information by name",
+        ),
     ]
 
 

@@ -1,0 +1,13 @@
+---
+'1':
+  ttl: 120
+  type: PTR
+  value: tagged-dns.example.org.
+'2':
+  ttl: 120
+  type: PTR
+  value: tagged-dns-external.example.org.
+'3':
+  ttl: 120
+  type: PTR
+  value: untagged.example.org.

@@ -1,1 +1,2 @@
 uv.lock linguist-generated=true
+tests/fixtures/*.json linguist-generated=true

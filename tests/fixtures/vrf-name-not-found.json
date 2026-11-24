@@ -1,0 +1,24 @@
+{
+  "source": {
+    "url": "http://netbox.example.com",
+    "populate_vrf_name": "no-such-vrf"
+  },
+  "init": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "http://netbox.example.com/api/ipam/vrfs/?name=no-such-vrf&limit=0"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "count": 0,
+          "next": null,
+          "previous": null,
+          "results": []
+        }
+      }
+    }
+  ],
+  "zones": {}
+}

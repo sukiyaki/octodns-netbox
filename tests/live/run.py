@@ -4,8 +4,14 @@
 
 Starts NetBox with Docker Compose, seeds it through the REST API, dumps every
 zone in cases.py through octoDNS's Manager.dump (the call octodns-dump makes),
-and compares the zones with tests/live/expected/. Then it adds
---perf-ip-count addresses and times --perf-runs full dumps.
+and compares the zones with tests/live/expected/. It records the NetBox
+responses of those dumps as unit-test fixtures (see record.py). On NetBox 4.7
+it also compares that recording with tests/fixtures/, so a NetBox change that
+reaches the responses cannot leave stale fixtures behind. To rewrite them:
+
+    uv run tests/live/run.py --netbox 4.7 --record-fixtures
+
+Then it adds --perf-ip-count addresses and times --perf-runs full dumps.
 
 Each run starts its own Compose project, octodns-netbox-live-<random> unless
 --project-name names one, and removes it at the end, also after Ctrl-C. It
@@ -20,16 +26,18 @@ files but no run.json. In the output of an earlier run, it replaces only
 these files:
 
     zones/<case>/<zone>yaml  the dumped zones
-    configs/<case>.yaml      the octoDNS configs (NETBOX_URL and NETBOX_TOKEN
-                             come from the environment)
+    fixtures/<case>.json     the recorded responses
+    configs/<case>.yaml      the octoDNS configs (NETBOX_URL, NETBOX_API_URL
+                             and NETBOX_TOKEN come from the environment)
     perf.json                HTTP requests per zone populate, dump timings
-    run.json                 versions, durations, result, errors
+    run.json                 versions, durations, result, errors, fixtures
     diff.txt                 differences from the expected zones
+    fixtures.diff            differences from tests/fixtures/
     octodns.log, netbox.log  logs
 
-Exit status: 0 when the zones match, 1 when they differ or a step fails,
-2 when the expected directory holds no zones yet. In that case the actual
-zones are still written, for review before they are copied there.
+Exit status: 0 when the zones and fixtures match, 1 when either differs or a
+step fails, 2 when the expected directory holds no zones yet. In that case the
+actual zones are still written, for review before they are copied there.
 """
 
 import argparse
@@ -50,17 +58,20 @@ import traceback
 from importlib import metadata
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
-from unittest import mock
 
-import requests
 import yaml
 from octodns.manager import Manager
 
 import cases
+import record
 import seed
 
 HERE = Path(__file__).resolve().parent
+FIXTURES_DIR = HERE.parent / "fixtures"
 IMAGE_TAGS = {"4.0": "v4.0.11-2.9.1", "4.7": "v4.7.5-5.1.2"}
+# The unit tests replay this release only. Older releases are checked by the
+# zones they dump.
+FIXTURES_NETBOX = "4.7"
 PACKAGES = ("octodns-netbox", "octodns", "pynetbox", "pydantic", "requests")
 # The file that claims --output-dir for one run. See claimed().
 LOCK = "run.lock"
@@ -81,9 +92,16 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--project-name", default=f"octodns-netbox-live-{secrets.token_hex(4)}"
     )
+    parser.add_argument(
+        "--record-fixtures",
+        action="store_true",
+        help=f"replace {FIXTURES_DIR} with this run's recording",
+    )
     args = parser.parse_args(argv)
     if args.netbox == "4.0" and args.token_version == 2:
         parser.error("NetBox 4.0 has no v2 API tokens")
+    if args.record_fixtures and args.netbox != FIXTURES_NETBOX:
+        parser.error(f"the fixtures are recorded from NetBox {FIXTURES_NETBOX}")
     return args
 
 
@@ -136,65 +154,78 @@ class Stack:
         self._run("down", "--volumes", "--remove-orphans")
 
 
-@contextlib.contextmanager
-def recorded_requests(into: List[str]) -> Iterator[None]:
-    """Append "METHOD /path?query" for every HTTP request sent inside the block."""
-    send = requests.Session.send
-
-    def recording_send(session: requests.Session, request: Any, **kwargs: Any) -> Any:
-        into.append(f"{request.method} {request.path_url}")
-        return send(session, request, **kwargs)
-
-    with mock.patch.object(requests.Session, "send", recording_send):
-        yield
-
-
-def write_config(case: cases.Case, path: Path) -> None:
-    source = {
+def source_config(case: cases.Case) -> Dict[str, Any]:
+    return {
         "class": "octodns_netbox.NetboxSource",
         "url": "env/NETBOX_URL",
         "token": "env/NETBOX_TOKEN",
         **case.settings,
     }
+
+
+def recorded_settings(case: cases.Case) -> Dict[str, Any]:
+    """The source settings as the unit tests pass them: no class, no token."""
+    return {
+        key: os.environ[value[4:]]
+        if isinstance(value, str) and value.startswith("env/")
+        else value
+        for key, value in source_config(case).items()
+        if key not in ("class", "token")
+    }
+
+
+def write_config(case: cases.Case, path: Path) -> None:
     config = {
-        "providers": {"netbox": source},
+        "providers": {"netbox": source_config(case)},
         "zones": {zone: {"sources": ["netbox"], "targets": []} for zone in case.zones},
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(config, sort_keys=False))
 
 
-def dump(case: cases.Case, zones_dir: Path, config_path: Path) -> Dict[str, List[str]]:
-    """Dump every zone of `case`. Returns the requests sent at init and per zone."""
+def dump(case: cases.Case, zones_dir: Path, config_path: Path) -> record.Recording:
+    """Dump every zone of `case`, recording the HTTP exchanges at init and per zone."""
     write_config(case, config_path)
-    sent: Dict[str, List[str]] = {"init": []}
-    with recorded_requests(sent["init"]):
-        manager = Manager(str(config_path))
+    sent: Dict[str, List[record.Exchange]] = {"init": []}
+    with record.recording(sent["init"]):
+        try:
+            manager = Manager(str(config_path))
+        except ValueError as error:
+            if case.init_error and case.init_error in str(error):
+                return record.Recording(sent, {})
+            raise
+    if case.init_error:
+        raise RuntimeError(
+            f"{case.name}: the config loaded without {case.init_error!r}"
+        )
     for zone in case.zones:
         # YamlProvider writes zone 0/26.2.0.192.in-addr.arpa. to
         # 0/26.2.0.192.in-addr.arpa.yaml but does not create the "0" directory.
         (zones_dir / f"{zone}yaml").parent.mkdir(parents=True, exist_ok=True)
         sent[zone] = []
-        with recorded_requests(sent[zone]):
+        with record.recording(sent[zone]):
             manager.dump(zone=zone, output_dir=str(zones_dir), sources=["netbox"])
-    return sent
+    sub_zones = {
+        zone: sorted(manager.configured_sub_zones(zone)) for zone in case.zones
+    }
+    return record.Recording(sent, sub_zones)
 
 
-def zone_files(root: Path) -> Dict[str, List[str]]:
+def tree_files(root: Path, pattern: str) -> Dict[str, List[str]]:
     if not root.is_dir():
         return {}
     return {
         path.relative_to(root).as_posix(): path.read_text().splitlines(keepends=True)
-        for path in sorted(root.rglob("*.yaml"))
+        for path in sorted(root.rglob(pattern))
     }
 
 
-def compare(expected_dir: Path, actual_dir: Path) -> Optional[List[str]]:
-    """Unified diff of the two zone trees, or None when expected_dir has no zones."""
-    expected = zone_files(expected_dir)
+def compare(expected_dir: Path, actual_dir: Path, pattern: str) -> Optional[List[str]]:
+    """Unified diff of the two trees, or None when expected_dir has no such files."""
+    expected = tree_files(expected_dir, pattern)
     if not expected:
         return None
-    actual = zone_files(actual_dir)
+    actual = tree_files(actual_dir, pattern)
     diff: List[str] = []
     for name in sorted(expected.keys() | actual.keys()):
         diff += difflib.unified_diff(
@@ -213,7 +244,7 @@ def measure_full_dumps(netbox: seed.NetBox, ip_count: int, runs: int) -> Dict[st
         with tempfile.TemporaryDirectory() as tmp:
             zones_dir = Path(tmp, "zones")
             start = time.perf_counter()
-            sent = dump(cases.PERF, zones_dir, Path(tmp, "perf.yaml"))
+            sent = dump(cases.PERF, zones_dir, Path(tmp, "perf.yaml")).sent
             seconds.append(round(time.perf_counter() - start, 3))
             if attempt == 0:
                 first_sent = sent
@@ -233,8 +264,37 @@ def measure_full_dumps(netbox: seed.NetBox, ip_count: int, runs: int) -> Dict[st
     }
 
 
-def _request_counts(sent: Dict[str, List[str]]) -> Dict[str, Any]:
-    return {step: {"count": len(r), "requests": r} for step, r in sent.items()}
+def _request_counts(sent: Dict[str, List[record.Exchange]]) -> Dict[str, Any]:
+    counts = {}
+    for step, exchanges in sent.items():
+        lines = [f"{request.method} {request.path_url}" for request, _ in exchanges]
+        counts[step] = {"count": len(lines), "requests": lines}
+    return counts
+
+
+def check_fixtures(
+    args: argparse.Namespace, out: Path, fixtures: Dict[str, Dict[str, Any]]
+) -> str:
+    """Record or compare the fixtures. Returns the "fixtures" entry of run.json."""
+    record.write(fixtures, out / "fixtures")
+    if args.record_fixtures:
+        record.write(fixtures, FIXTURES_DIR)
+        print(f"Rewrote {FIXTURES_DIR}.")
+        return "recorded"
+    if args.netbox != FIXTURES_NETBOX:
+        return "not-checked"
+    diff = compare(FIXTURES_DIR, out / "fixtures", "*.json")
+    if diff == []:
+        print(f"The recording matches {FIXTURES_DIR}.")
+        return "matches"
+    diff = diff or [f"{FIXTURES_DIR} holds no fixtures.\n"]
+    (out / "fixtures.diff").write_text("".join(diff))
+    sys.stdout.writelines(diff)
+    print(
+        f"The recording differs from {FIXTURES_DIR}. If NetBox changed, rewrite "
+        "them with --record-fixtures and review the diff."
+    )
+    return "differs"
 
 
 def _configure_logging(log_file: Path) -> None:
@@ -303,12 +363,12 @@ def prepare_output_dir(out: Path) -> None:
     """Remove what an earlier run wrote in `out`, which this run has claimed.
 
     Exits if `out` holds files but no run.json, because they are not the
-    output of a run.
+    output of a run: --output-dir tests would remove tests/fixtures.
     """
     others = [path for path in out.iterdir() if path.name != LOCK]
     if others and not (out / "run.json").is_file():
         sys.exit(f"{out} holds no run.json. Pass a new or empty --output-dir.")
-    for child in ("zones", "configs"):
+    for child in ("zones", "fixtures", "configs"):
         shutil.rmtree(out / child, ignore_errors=True)
     for name in (
         "perf.json",
@@ -316,6 +376,7 @@ def prepare_output_dir(out: Path) -> None:
         "run.json",
         "run.json.partial",
         "diff.txt",
+        "fixtures.diff",
         "netbox.log",
         "octodns.log",
     ):
@@ -339,19 +400,24 @@ def check_netbox(
         vrf_ids = seed.seed(netbox)
 
     os.environ["NETBOX_URL"] = url
+    os.environ["NETBOX_API_URL"] = f"{url}/api/"
     os.environ["NETBOX_TOKEN"] = token
+    live_cases = cases.cases(vrf_ids)
     with _timed(durations, "dump"):
-        sent = {
-            case.name: _request_counts(
-                dump(
-                    case,
-                    out / "zones" / case.name,
-                    out / "configs" / f"{case.name}.yaml",
-                )
+        recordings = {
+            case.name: dump(
+                case,
+                out / "zones" / case.name,
+                out / "configs" / f"{case.name}.yaml",
             )
-            for case in cases.cases(vrf_ids)
+            for case in live_cases
         }
-    diff = compare(args.expected_dir, out / "zones")
+    sent = {name: _request_counts(r.sent) for name, r in recordings.items()}
+    fixtures = {
+        case.name: record.fixture(recordings[case.name], recorded_settings(case), url)
+        for case in live_cases
+    }
+    diff = compare(args.expected_dir, out / "zones", "*.yaml")
     if diff is None:
         status, result = 2, "no-expected"
         print(
@@ -366,6 +432,10 @@ def check_netbox(
     else:
         status, result = 0, "matches"
         print(f"The zones match {args.expected_dir}.")
+    run["fixtures"] = check_fixtures(args, out, fixtures)
+    if run["fixtures"] == "differs":
+        status = 1
+        result = "fixtures-differ" if result == "matches" else result
 
     perf: Dict[str, Any] = {"requests_per_zone_populate": sent}
     if args.perf_runs:
