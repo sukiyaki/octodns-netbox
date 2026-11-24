@@ -80,6 +80,14 @@ class TestFromAddressIPv4:
             == "1.0/26.2.100.10.in-addr.arpa."
         )
 
+    def test_from_address_ipv4_classless_zone_with_fewer_labels_is_the_apex(self):
+        # Pins the behavior of 0.5.0. Every address of the zone gets this name.
+        zone = Zone("0/26.0.192.in-addr.arpa.", [])
+        assert (
+            from_address(zone, ipaddress.IPv4Address("192.0.0.5"))
+            == "0/26.0.192.in-addr.arpa."
+        )
+
     def test_from_address_ipv4_octet_boundary(self):
         zone_1 = Zone("10.in-addr.arpa.", [])
         assert (
