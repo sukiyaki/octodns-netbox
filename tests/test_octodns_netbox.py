@@ -132,17 +132,41 @@ def test_init_rejects_both_populate_vrf_id_and_populate_vrf_name():
         NetboxSource("netbox", **SETTINGS, populate_vrf_id=1, populate_vrf_name="mgmt")
 
 
+TOKEN = "nbt_K3yOfTheTest.S3cretOfTheTest0123456789"
+
+
 @pytest.mark.parametrize(
     "settings",
-    [{"populate_vrf_id": 1, "populate_vrf_name": "mgmt"}, {"ttl": "ten"}],
+    [
+        pytest.param({"token": TOKEN}, id="missing-url"),
+        pytest.param({"url": SETTINGS["url"], "tokne": TOKEN}, id="misspelled-token"),
+        pytest.param(
+            {
+                "url": SETTINGS["url"],
+                "token": TOKEN,
+                "populate_vrf_id": 1,
+                "populate_vrf_name": "vrf-name-value",
+            },
+            id="both-vrf-keys",
+        ),
+        pytest.param(
+            {"url": SETTINGS["url"], "token": TOKEN, "ttl": "ttl-value"},
+            id="wrong-type",
+        ),
+    ],
 )
-def test_init_error_does_not_contain_the_token(settings):
-    token = "nbt_K3yOfTheTest.S3cretOfTheTest0123456789"
+def test_init_error_contains_no_value_of_a_setting(settings):
     with pytest.raises(ValidationError) as excinfo:
-        NetboxSource("netbox", url=SETTINGS["url"], token=token, **settings)
+        NetboxSource("netbox", **settings)
+    error = excinfo.value
     # str() shortens a long input to its start and end, so look for any piece.
-    pieces = {token[i : i + 8] for i in range(len(token) - 7)}
-    for text in (str(excinfo.value), excinfo.value.json()):
+    pieces = {
+        value[i : i + 8]
+        for value in settings.values()
+        if isinstance(value, str)
+        for i in range(len(value) - 7)
+    }
+    for text in (str(error), error.json(), repr(error), repr(error.errors())):
         assert [piece for piece in pieces if piece in text] == []
 
 

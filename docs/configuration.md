@@ -170,6 +170,9 @@ octoDNS stops loading the config when the source raises one of these errors.
 | Both VRF keys are set | `Do not set both populate_vrf_id and populate_vrf_name.` |
 | No VRF, or more than one VRF, has the name in `populate_vrf_name` | `Failed to retrieve VRF information by name '<name>'. Use a valid populate_vrf_id instead.` |
 
+A `ValidationError` from the source holds none of the values in the config.
+It names the key, so octoDNS prints neither the token nor the value that failed.
+
 ## Errors while reading a zone
 
 The source raises `ValueError` when it cannot read a reverse zone name.

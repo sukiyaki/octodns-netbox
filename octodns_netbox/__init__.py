@@ -10,7 +10,7 @@ import re
 from collections import defaultdict
 from collections.abc import Iterable
 from ipaddress import IPv4Address, IPv6Address, ip_interface
-from typing import Any, Literal, NamedTuple, cast
+from typing import Any, Literal, NamedTuple, Self, cast
 
 import pynetbox
 import requests
@@ -22,10 +22,14 @@ from pydantic import (
     AnyHttpUrl,
     BaseModel,
     ConfigDict,
+    ModelWrapValidatorHandler,
     TypeAdapter,
+    ValidationError,
     ValidationInfo,
     field_validator,
+    model_validator,
 )
+from pydantic_core import InitErrorDetails
 
 from octodns_netbox import reversename
 
@@ -75,9 +79,11 @@ class NetboxSourceConfig(BaseModel):
     """The settings of a NetboxSource in the octoDNS config.
 
     Unknown keys are dropped. NetboxSource logs a warning for each one.
+    A ValidationError names each key that failed, and holds no value.
     """
 
-    model_config = ConfigDict(frozen=True, extra="ignore")
+    # Keeps the input out of str() and repr() of a ValidationError.
+    model_config = ConfigDict(frozen=True, extra="ignore", hide_input_in_errors=True)
 
     url: str
     token: str
@@ -104,6 +110,29 @@ class NetboxSourceConfig(BaseModel):
         if value is not None and info.data.get("populate_vrf_id") is not None:
             raise ValueError("Do not set both populate_vrf_id and populate_vrf_name.")
         return value
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def drop_input_from_errors(
+        cls, data: Any, handler: ModelWrapValidatorHandler[Self]
+    ) -> Self:
+        """Replace the input of each error, which can hold the token, with None.
+
+        hide_input_in_errors does not reach error.json() or error.errors(), and
+        the input of a missing key is every setting.
+        """
+        try:
+            return handler(data)
+        except ValidationError as error:
+            lines = []
+            for line in error.errors():
+                details = InitErrorDetails(
+                    type=line["type"], loc=line["loc"], input=None
+                )
+                if "ctx" in line:
+                    details["ctx"] = line["ctx"]
+                lines.append(details)
+            raise ValidationError.from_exception_data(error.title, lines) from None
 
 
 # octoDNS has no type information, so BaseSource is Any to mypy.
