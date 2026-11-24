@@ -90,6 +90,7 @@ def cases(vrf_ids: dict[str, int]) -> list[Case]:
         Case("idn", ("café.example.", "113.0.203.in-addr.arpa.")),
         Case("idn-underscore", ("ex_ample.com.", "8.0.192.in-addr.arpa.")),
         Case("idn-case", ("idn-case.example.", "11.0.192.in-addr.arpa.")),
+        Case("invalid-a-label", ("a-label.example.", "9.0.192.in-addr.arpa.")),
         Case("vrf-duplicate", ("7.0.192.in-addr.arpa.",)),
         Case("vrf-anycast", ("10.0.192.in-addr.arpa.",)),
         Case("ipv6-long-prefix", (V6_116, V6_124, V6_128)),

@@ -373,6 +373,19 @@ def test_populate_lower_cases_each_name_as_a_whole_as_0_5_0_did():
     }
 
 
+def test_populate_skips_a_record_name_octodns_cannot_decode_with_a_warning(caplog):
+    case = load_case("invalid-a-label")
+    source = connect(case)
+    for zone_name in case["zones"]:
+        populate(source, case, zone_name)
+    # The PTR record of 192.0.9.2 keeps the name, so only the A record is gone.
+    (warning,) = source_warnings(caplog)
+    assert warning.startswith(
+        "Skipping the name 'xn--bad_label.a-label.example.' of 192.0.9.2 "
+        "in zone a-label.example.: "
+    )
+
+
 def test_populate_fails_on_an_ipv6_zone_label_that_is_not_one_hex_digit():
     # The autouse mocker fails any request, so this also shows that the source
     # stops before it asks NetBox anything.

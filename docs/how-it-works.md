@@ -89,6 +89,22 @@ The other names in the zone still get their records:
 Skipping the name 'a\u200db.xn--caf-dma.example.' of 203.0.113.4 in zone xn--caf-dma.example.: Joiner U+200D not allowed at position 2 in 'a\u200db'
 ```
 
+octoDNS also decodes each record name back to Unicode for its logs.
+A label that starts with `xn--` but is not valid IDNA, such as `xn--bad_label`, has no Unicode form.
+octoDNS then stops with `IdnaError: Invalid A-label`, and the zone gets no records, in lenient mode too.
+The source therefore skips a name in a forward zone when octoDNS cannot decode its record name, with the same warning:
+
+```text
+Skipping the name 'xn--bad_label.a-label.example.' of 192.0.9.2 in zone a-label.example.: Invalid A-label
+```
+
+octoDNS 1.10 to 1.12 decode a whole record name when one label starts with `xn--`, and IDNA does not allow `_`.
+With those releases, the source also skips `_srv.h\u00f6st.example.com` in zone `example.com.`, because octoDNS cannot decode `_srv.xn--hst-sna`.
+octoDNS 1.13 and later decode each label, and the name gets its record.
+
+octoDNS does not decode a PTR value, so the source keeps such a name there, as 0.5.0 did.
+The PTR record of `192.0.9.2` points to `xn--bad_label.a-label.example.`.
+
 ### octoDNS makes each name relative
 
 The source gives octoDNS each name as an FQDN, and octoDNS makes it relative to the zone.

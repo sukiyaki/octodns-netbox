@@ -203,6 +203,11 @@ IPS = (
     # in a zone with an underscore. IDNA does not allow "_", so a conversion of
     # the whole name fails, and a conversion of each label does not.
     Ip("192.0.8.1/24", "höst.ex_ample.com"),
+    # Zones a-label.example. and 9.0.192.in-addr.arpa.: a label that starts
+    # with "xn--" but is not an A-label. octoDNS cannot decode it in a record
+    # name, and keeps it in a PTR value.
+    Ip("192.0.9.1/24", "ok.a-label.example"),
+    Ip("192.0.9.2/24", "xn--bad_label.a-label.example"),
     # Zone 10.0.192.in-addr.arpa.: anycast addresses that give a PTR record
     # more than one name from one VRF. 192.0.10.1 has the same two names in
     # the Global VRF and in VRF anycast. 192.0.10.2 has two names in the

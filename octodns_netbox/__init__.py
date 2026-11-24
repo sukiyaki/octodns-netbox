@@ -14,7 +14,7 @@ from typing import Any, Literal, NamedTuple, Self, cast
 
 import pynetbox
 import requests
-from octodns.idna import IdnaError, idna_encode
+from octodns.idna import IdnaError, idna_decode, idna_encode
 from octodns.record import Record
 from octodns.source.base import BaseSource
 from octodns.zone import SubzoneRecordException, Zone
@@ -288,6 +288,14 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 if not self._fqdn_in_zone(fqdn, zone):
                     self.log.debug("Skip: FQDN=%s on zone %s", fqdn, zone.name)
                     continue
+                try:
+                    # octoDNS decodes each record name for its logs. An
+                    # IdnaError there, as for the invalid A-label xn--bad_label,
+                    # stops the whole zone, even when octoDNS is lenient.
+                    idna_decode(zone.hostname_from_fqdn(fqdn))
+                except IdnaError as error:
+                    self._skip_name(fqdn, ip_address, zone, error)
+                    continue
                 rr = ResourceRecord(fqdn, record_type, ip_address.compressed)
                 self.log.debug(
                     "Created %s record %s for zone %s", record_type, rr, zone.name
@@ -317,14 +325,23 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 labels = name.lower().split(".")
                 fqdns.append(".".join(idna_encode(label) for label in labels))
             except IdnaError as error:
-                self.log.warning(
-                    "Skipping the name %r of %s in zone %s: %s",
-                    name,
-                    ip_address,
-                    zone.name,
-                    error,
-                )
+                self._skip_name(name, ip_address, zone, error)
         return fqdns
+
+    def _skip_name(
+        self,
+        name: str,
+        ip_address: IPv4Address | IPv6Address,
+        zone: Zone,
+        error: IdnaError,
+    ) -> None:
+        self.log.warning(
+            "Skipping the name %r of %s in zone %s: %s",
+            name,
+            ip_address,
+            zone.name,
+            error,
+        )
 
     def _fqdn_in_zone(self, fqdn: str, zone: Zone) -> bool:
         if fqdn == zone.name:

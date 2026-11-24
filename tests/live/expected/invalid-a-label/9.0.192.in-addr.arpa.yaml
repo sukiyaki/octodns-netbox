@@ -1,0 +1,9 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  value: ok.a-label.example.
+'2':
+  ttl: 60
+  type: PTR
+  value: xn--bad_label.a-label.example.
