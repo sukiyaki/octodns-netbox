@@ -189,8 +189,12 @@ Python's `ipaddress` module raises the `AddressValueError` errors, a kind of `Va
 
 Most users run the source from octoDNS commands and need nothing in this section.
 
-`octodns_netbox.NetboxSource(id, **settings)` takes the same keys as the config.
-It keeps them in `source.config`, a frozen `octodns_netbox.NetboxSourceConfig`.
+`octodns_netbox.NetboxSource(id, /, **settings)` takes the name of the source as its first argument, and the same keys as the config as keyword arguments.
+Pass the name positionally.
+A keyword argument named `id` goes to the settings, where it is an unknown key, as in the config.
+`NetboxSource(id="my-id", url=..., token=...)` worked in 0.5.0, and now raises `TypeError: NetboxSource.__init__() missing 1 required positional argument: 'id'`.
+octoDNS passes the name positionally, so configs are not affected.
+The source keeps the settings in `source.config`, a frozen `octodns_netbox.NetboxSourceConfig`.
 
 ```python
 from octodns_netbox import NetboxSource

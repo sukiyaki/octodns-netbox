@@ -113,7 +113,7 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
     SUPPORTS_GEO = False
     SUPPORTS = frozenset({"A", "AAAA", "PTR"})
 
-    def __init__(self, id: str, **settings: Any):
+    def __init__(self, id: str, /, **settings: Any):
         self.log = logging.getLogger(f"{self.__class__.__name__}[{id}]")
         self.config = NetboxSourceConfig(**settings)
         super().__init__(id)

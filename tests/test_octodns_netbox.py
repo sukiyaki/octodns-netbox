@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 import requests_mock
+from octodns.manager import Manager
 from octodns.provider.yaml import YamlProvider
 from octodns.zone import Zone
 from pydantic import ValidationError
@@ -180,6 +181,24 @@ def test_unknown_key_logs_a_warning_and_changes_no_zone(caplog, key, value):
     warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
     assert warnings == [f"Unknown setting {key} has no effect."]
     assert_populates_expected_zones(source, case, "description")
+
+
+def test_id_key_logs_a_warning_like_any_unknown_key(tmp_path, caplog):
+    # octoDNS passes the provider name as the first argument and every key
+    # as a keyword argument.
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "providers:\n"
+        "  netbox:\n"
+        "    class: octodns_netbox.NetboxSource\n"
+        f"    url: {SETTINGS['url']}\n"
+        "    token: t\n"
+        "    id: stray-value\n"
+        "zones: {}\n"
+    )
+    manager = Manager(str(config))
+    assert manager.providers["netbox"].id == "netbox"
+    assert source_warnings(caplog) == ["Unknown setting id has no effect."]
 
 
 def test_populate_vrf_id_null_reads_the_global_vrf():
