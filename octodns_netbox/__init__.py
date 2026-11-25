@@ -8,7 +8,7 @@ based on a NetBox API.
 import logging
 import re
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_interface
 from typing import Any, Literal, NamedTuple, Self, cast
 
@@ -344,8 +344,6 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 in_sub_zones.setdefault((ptr_name, "PTR"), sub_zone)
                 continue
             names = _names(ipam_record[field_name])
-            if not self.config.multivalue_ptr:
-                names = names[:1]
             fqdns = []
             for fqdn in self._octodns_fqdns(names, ip_address, zone):
                 rr = ResourceRecord(ptr_name, "PTR", fqdn)
@@ -354,6 +352,10 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 self.log.debug("Adding PTR record %s to zone %s", rr, zone.name)
                 records.append(rr)
                 fqdns.append(fqdn)
+                # The first name that the source can use. The names after it
+                # are not converted or checked, so they log no warning.
+                if not self.config.multivalue_ptr:
+                    break
             if fqdns:
                 nb_vrf = ipam_record.vrf
                 vrf = (nb_vrf.id, nb_vrf.name) if nb_vrf else (None, "Global")
@@ -415,19 +417,17 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
 
     def _octodns_fqdns(
         self, names: list[str], ip_address: IPv4Address | IPv6Address, zone: Zone
-    ) -> list[str]:
-        """The names as octoDNS spells them.
+    ) -> Iterator[str]:
+        """The names as octoDNS spells them, one at a time.
 
         A name that the source cannot use is left out, with a warning.
         """
-        fqdns: list[str] = []
         for name in names:
             fqdn, unusable = _octodns_name(name)
             if unusable is not None:
                 self._skip_name(name, ip_address, zone, unusable)
                 continue
-            fqdns.append(fqdn)
-        return fqdns
+            yield fqdn
 
     def _usable(
         self,

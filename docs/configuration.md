@@ -172,8 +172,9 @@ The key has no effect on reverse zones.
 
 ### `multivalue_ptr`
 
-With `false`, the PTR record of an IP address gets the first name in the name field.
-With `true`, it gets every name in the name field.
+With `false`, the PTR record of an IP address gets the first name in the name field that the source can use.
+A name that the source skips, such as a name without an IDNA form or a PTR value that octoDNS rejects, does not count, and the next name takes its place.
+With `true`, it gets every name in the name field that the source can use.
 
 When several NetBox IP addresses have the same address, the PTR record gets values from each of them.
 See [Create PTR records](reverse-zones.md#fix-a-ptr-record-with-values-from-two-vrfs).

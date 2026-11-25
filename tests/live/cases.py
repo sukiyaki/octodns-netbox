@@ -156,6 +156,12 @@ def cases(vrf_ids: dict[str, int]) -> list[Case]:
             "classless-parent",
             ("21.0.192.in-addr.arpa.", "0-26.21.0.192.in-addr.arpa."),
         ),
+        Case("first-usable-ptr", ("22.0.192.in-addr.arpa.",)),
+        Case(
+            "first-usable-ptr-multivalue",
+            ("22.0.192.in-addr.arpa.",),
+            {"multivalue_ptr": True},
+        ),
     ]
 
 

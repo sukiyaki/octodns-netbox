@@ -1,0 +1,15 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  value: host-1.first-usable.example.
+'2':
+  ttl: 60
+  type: PTR
+  value: host-2.first-usable.example.
+'3':
+  ttl: 60
+  type: PTR
+  values:
+  - host-3.first-usable.example.
+  - other-3.first-usable.example.

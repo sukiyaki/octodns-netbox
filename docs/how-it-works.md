@@ -188,6 +188,8 @@ When the config holds the parent zone too, the source gives it no PTR record for
 
 An IP address can have several names.
 With `multivalue_ptr: false`, the source treats the first name in the field as the main name and uses only that one.
+When it skips the first name, for example because octoDNS rejects `printer.` as a PTR value, it uses the next name that it can use.
+It does not check the names after the one it uses, so they log no warning.
 With `multivalue_ptr: true`, it uses every name.
 
 ## Records from several IP addresses

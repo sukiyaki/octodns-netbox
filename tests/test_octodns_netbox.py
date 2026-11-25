@@ -863,6 +863,41 @@ def test_populate_skips_a_name_with_an_empty_label_with_a_warning(caplog, lenien
     ]
 
 
+@pytest.mark.parametrize(
+    ("name", "skipped"),
+    [
+        (
+            "first-usable-ptr",
+            [
+                ("printer.", "192.0.22.1"),
+                ("a\u200db.first-usable.example.", "192.0.22.2"),
+                (".host-3.first-usable.example.", "192.0.22.3"),
+            ],
+        ),
+        (
+            "first-usable-ptr-multivalue",
+            [
+                ("printer.", "192.0.22.1"),
+                ("a\u200db.first-usable.example.", "192.0.22.2"),
+                (".host-3.first-usable.example.", "192.0.22.3"),
+                ("see wiki.", "192.0.22.3"),
+            ],
+        ),
+    ],
+)
+def test_populate_gives_a_ptr_record_the_first_name_the_source_can_use(
+    caplog, name, skipped
+):
+    # With multivalue_ptr: false, a name that the source skips is not the
+    # first name, and the source checks no name after the first that it can
+    # use. tests/live/expected/<name>/ holds the PTR records.
+    case = load_case(name)
+    populate(connect(case), case, "22.0.192.in-addr.arpa.")
+    assert skipped_names(caplog) == [
+        (fqdn, address, "22.0.192.in-addr.arpa.") for fqdn, address in skipped
+    ]
+
+
 def test_populate_keeps_a_name_that_octodns_rejects_when_lenient(caplog):
     # A lenient octoDNS keeps a record that fails its validation, and logs
     # why. The source keeps the name as well.

@@ -318,6 +318,18 @@ IPS = (
     Ip("192.0.21.1/24", "host-1.classless-parent.example"),
     Ip("192.0.21.63/24", "host-63.classless-parent.example"),
     Ip("192.0.21.64/24", "host-64.classless-parent.example"),
+    # Zone 22.0.192.in-addr.arpa.: names the source cannot use before and
+    # after names it can use.
+    Ip("192.0.22.1/24", "printer, host-1.first-usable.example"),
+    Ip(
+        "192.0.22.2/24",
+        "a‍b.first-usable.example, host-2.first-usable.example",
+    ),
+    Ip(
+        "192.0.22.3/24",
+        ".host-3.first-usable.example, host-3.first-usable.example, "
+        "other-3.first-usable.example, see wiki",
+    ),
 )
 
 

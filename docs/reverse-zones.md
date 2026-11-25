@@ -98,7 +98,7 @@ zones:
       - yaml
 ```
 
-A PTR record gets the first name in the description.
+A PTR record gets the first name in the description that the source can use.
 If `2001:db8::1:2/64` has the description `description-host2.subdomain1.example.com,description-host2.subdomain2.example.com`, the zone gets this record:
 
 ```yaml
