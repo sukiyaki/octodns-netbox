@@ -181,6 +181,8 @@ RFC 2317 delegates part of a `/24` with one CNAME record for each address in the
 The PTR record lives at the target of that CNAME.
 The source names it as the example in RFC 2317 does, with the last octet of the address in front of the zone name.
 The CNAME records belong to the parent zone, and the source does not create them.
+When the config holds the parent zone too, the source gives it no PTR record for the addresses of the classless zone.
+[Configure the parent of a classless zone](reverse-zones.md#configure-the-parent-of-a-classless-zone) shows the config.
 
 ### The PTR value is the first name
 

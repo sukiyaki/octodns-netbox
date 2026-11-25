@@ -653,6 +653,66 @@ def test_populate_leaves_the_ptr_record_of_a_configured_subzone_out(caplog, leni
     ]
 
 
+CLASSLESS_PARENT_CONFIG = """\
+providers:
+  netbox:
+    class: octodns_netbox.NetboxSource
+    url: {url}
+    token: t
+  cnames:
+    class: octodns.provider.yaml.YamlProvider
+    directory: {directory}/cnames
+  yaml:
+    class: octodns.provider.yaml.YamlProvider
+    directory: {directory}/zones
+zones:
+  21.0.192.in-addr.arpa.:
+    sources: [netbox, cnames]
+    targets: [yaml]
+  0-26.21.0.192.in-addr.arpa.:
+    sources: [netbox]
+    targets: [yaml]
+"""
+
+
+def test_the_parent_of_a_classless_zone_takes_the_cnames_from_another_source(
+    tmp_path,
+):
+    # The config of docs/reverse-zones.md. The CNAME records that RFC 2317
+    # puts in the parent zone come from a YamlProvider, and octoDNS rejects a
+    # CNAME record next to a PTR record.
+    case = load_case("classless-parent")
+    (tmp_path / "cnames").mkdir()
+    (tmp_path / "zones").mkdir()
+    (tmp_path / "cnames" / "21.0.192.in-addr.arpa.yaml").write_text(
+        "".join(
+            f"'{host}':\n  type: CNAME\n  value: {host}.0-26.21.0.192.in-addr.arpa.\n"
+            for host in (1, 63)
+        )
+    )
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        CLASSLESS_PARENT_CONFIG.format(url=case["source"]["url"], directory=tmp_path)
+    )
+    exchanges = [e for zone in case["zones"].values() for e in zone["exchanges"]]
+    with replaying(case["init"] + exchanges):
+        changes = Manager(str(config)).sync(dry_run=False)
+    # The parent gets the two CNAME records and the PTR record of
+    # 192.0.21.64, and the classless zone the PTR records of .1 and .63.
+    assert changes == 5
+
+
+def test_populate_keeps_the_ptr_records_when_a_subzone_names_no_network(caplog):
+    # RFC 2317 lets a classless zone have any name, such as subnet1, which
+    # tells the source no addresses. octoDNS's rule for names still applies.
+    case = load_case("classless-parent")
+    zone = Zone("21.0.192.in-addr.arpa.", ["subnet1"])
+    with replaying(case["zones"][zone.name]["exchanges"]):
+        connect(case).populate(zone)
+    assert sorted(record.name for record in zone.records) == ["1", "63", "64"]
+    assert source_warnings(caplog) == []
+
+
 def test_populate_skips_fqdn_that_only_shares_the_zone_suffix():
     # https://github.com/sukiyaki/octodns-netbox/issues/78
     case = load_case("issue-78")

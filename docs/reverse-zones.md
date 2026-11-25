@@ -191,12 +191,79 @@ The source names each PTR record with the last octet of the address in front of 
 
 The source does not create the CNAME records that point from the parent zone, `2.0.192.in-addr.arpa.`, to the classless zone.
 Add them where you manage the parent zone.
+To manage the parent zone with octoDNS and this source too, see [Configure the parent of a classless zone](#configure-the-parent-of-a-classless-zone).
 
 A classless zone name can have fewer labels.
 The other labels give the first octets of the network, as in any reverse zone.
 The first label gives the next octet and the prefix length, and the octets after it are 0.
 `0/26.0.192.in-addr.arpa.` covers `192.0.0.0/26`, and the PTR record of `192.0.0.5` is `5.0/26.0.192.in-addr.arpa.`.
 `64-26.0.192.in-addr.arpa.` covers `192.0.64.0/26`, and the PTR record of `192.0.64.5` is `5.64-26.0.192.in-addr.arpa.`.
+
+## Configure the parent of a classless zone
+
+RFC 2317 puts a CNAME record in the parent zone for each address of the classless zone.
+octoDNS rejects a CNAME value that holds a slash, such as `1.0/26.2.0.192.in-addr.arpa.`.
+Name the classless zone in the RFC 4183 form, `0-26.2.0.192.in-addr.arpa.`, for this setup.
+
+Give the classless zone a name inside the zone that holds the CNAME records, as `0-26.2.0.192.in-addr.arpa.` is inside `2.0.192.in-addr.arpa.`.
+octoDNS finds the sub-zones of a zone by name alone.
+`64-26.0.192.in-addr.arpa.` covers the same addresses as `0-26.64.0.192.in-addr.arpa.`, but it is not inside `64.0.192.in-addr.arpa.`.
+With the shorter name, octoDNS gives zone `64.0.192.in-addr.arpa.` no sub-zone, and the source cannot tell that the classless zone exists.
+That zone then gets a PTR record next to each CNAME record, and octoDNS stops it.
+
+1. Add both zones to your octoDNS config.
+   The parent zone reads the CNAME records from a second source, here a `YamlProvider` with the directory `./cnames`:
+
+   ```yaml
+   providers:
+     netbox:
+       class: octodns_netbox.NetboxSource
+       url: https://netbox.example.com
+       token: env/NETBOX_TOKEN
+     cnames:
+       class: octodns.provider.yaml.YamlProvider
+       directory: ./cnames
+     yaml:
+       class: octodns.provider.yaml.YamlProvider
+       directory: ./zones
+
+   zones:
+     2.0.192.in-addr.arpa.:
+       sources:
+         - netbox
+         - cnames
+       targets:
+         - yaml
+     0-26.2.0.192.in-addr.arpa.:
+       sources:
+         - netbox
+       targets:
+         - yaml
+   ```
+
+2. Write a CNAME record for each address of the classless zone in `cnames/2.0.192.in-addr.arpa.yaml`:
+
+   ```yaml
+   '1':
+     type: CNAME
+     value: 1.0-26.2.0.192.in-addr.arpa.
+   '2':
+     type: CNAME
+     value: 2.0-26.2.0.192.in-addr.arpa.
+   ```
+
+octoDNS treats `0-26.2.0.192.in-addr.arpa.` as a sub-zone of `2.0.192.in-addr.arpa.`.
+The source reads the network of the sub-zone, `192.0.2.0/26`, and gives the parent zone no PTR record for an address in that network.
+octoDNS rejects a CNAME record next to another record of the same name, so a PTR record there would stop the zone.
+For each address that it leaves out, the source logs a warning:
+
+```text
+Skipping subzone record: 1.2.0.192.in-addr.arpa. PTR, which zone 0-26.2.0.192.in-addr.arpa. holds
+```
+
+The parent zone keeps the PTR records of the other addresses, such as `192.0.2.65`.
+The source reads the network only from a zone name in the `0/26` or `0-26` form.
+For a classless zone with another name, such as `subnet1.2.0.192.in-addr.arpa.`, the parent zone gets the PTR record of every address.
 
 ## Fix a PTR record with values from two VRFs
 

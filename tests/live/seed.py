@@ -312,6 +312,12 @@ IPS = (
         "192.0.20.2/24",
         "host.lab.strict-subzone.example, see wiki.lab.strict-subzone.example",
     ),
+    # Zones 21.0.192.in-addr.arpa. and 0-26.21.0.192.in-addr.arpa., which
+    # covers 192.0.21.0/26: the last address in the classless zone and the
+    # first after it.
+    Ip("192.0.21.1/24", "host-1.classless-parent.example"),
+    Ip("192.0.21.63/24", "host-63.classless-parent.example"),
+    Ip("192.0.21.64/24", "host-64.classless-parent.example"),
 )
 
 

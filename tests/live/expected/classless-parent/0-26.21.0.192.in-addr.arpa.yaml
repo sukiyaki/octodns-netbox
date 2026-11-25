@@ -1,0 +1,9 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  value: host-1.classless-parent.example.
+'63':
+  ttl: 60
+  type: PTR
+  value: host-63.classless-parent.example.

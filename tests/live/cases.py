@@ -152,6 +152,10 @@ def cases(vrf_ids: dict[str, int]) -> list[Case]:
             "subzone-unusable",
             ("strict-subzone.example.", "lab.strict-subzone.example."),
         ),
+        Case(
+            "classless-parent",
+            ("21.0.192.in-addr.arpa.", "0-26.21.0.192.in-addr.arpa."),
+        ),
     ]
 
 

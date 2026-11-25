@@ -1,0 +1,207 @@
+{
+  "source": {
+    "url": "http://netbox.example.com"
+  },
+  "init": [],
+  "zones": {
+    "21.0.192.in-addr.arpa.": {
+      "sub_zones": [
+        "0-26"
+      ],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=192.0.21.0%2F24&family=4&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 3,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 102,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/102/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/102/",
+                  "display": "192.0.21.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.21.1/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host-1.classless-parent.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 103,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/103/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/103/",
+                  "display": "192.0.21.63/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.21.63/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host-63.classless-parent.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 104,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/104/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/104/",
+                  "display": "192.0.21.64/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.21.64/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host-64.classless-parent.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "0-26.21.0.192.in-addr.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=192.0.21.0%2F26&family=4&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 2,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 102,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/102/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/102/",
+                  "display": "192.0.21.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.21.1/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host-1.classless-parent.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 103,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/103/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/103/",
+                  "display": "192.0.21.63/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.21.63/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host-63.classless-parent.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

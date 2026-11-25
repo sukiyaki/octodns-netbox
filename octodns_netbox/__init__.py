@@ -9,7 +9,7 @@ import logging
 import re
 from collections import defaultdict
 from collections.abc import Iterable
-from ipaddress import IPv4Address, IPv6Address, ip_interface
+from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_interface
 from typing import Any, Literal, NamedTuple, Self, cast
 
 import pynetbox
@@ -317,6 +317,7 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
     def _ptr_records(self, zone: Zone, lenient: bool) -> list[ResourceRecord]:
         field_name = self.config.field_name
         network = reversename.to_network(zone)
+        sub_zone_networks = _sub_zone_networks(zone)
         ipam_records = self._ip_addresses(
             {
                 f"{field_name}__empty": "false",
@@ -336,7 +337,9 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
             ptr_name = reversename.from_address(zone, ip_address)
-            sub_zone = _sub_zone(zone, ptr_name)
+            sub_zone = _sub_zone(zone, ptr_name) or next(
+                (fqdn for fqdn, net in sub_zone_networks if ip_address in net), None
+            )
             if sub_zone:
                 in_sub_zones.setdefault((ptr_name, "PTR"), sub_zone)
                 continue
@@ -547,3 +550,23 @@ def _sub_zone(zone: Zone, owner: str) -> str | None:
         if name == sub_zone or name.endswith(f".{sub_zone}"):
             return f"{sub_zone}.{zone.name}"
     return None
+
+
+def _sub_zone_networks(zone: Zone) -> list[tuple[str, IPv4Network | IPv6Network]]:
+    """The configured sub-zones of a reverse zone, with their networks.
+
+    A classless zone such as 0-26.2.0.192.in-addr.arpa. holds the PTR records
+    of its addresses under its own name, so octoDNS's rule for names misses
+    them. The parent zone holds the CNAME records that point there (RFC 2317),
+    and gets no PTR record for those addresses. A sub-zone whose name gives no
+    network, such as subnet1.2.0.192.in-addr.arpa., is left to the rule for
+    names.
+    """
+    networks = []
+    for sub_zone in sorted(zone.sub_zones):
+        fqdn = f"{sub_zone}.{zone.name}"
+        try:
+            networks.append((fqdn, reversename.to_network(Zone(fqdn, []))))
+        except ValueError:
+            continue
+    return networks
