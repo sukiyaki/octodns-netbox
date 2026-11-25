@@ -217,6 +217,7 @@ Python's `ipaddress` module raises the `AddressValueError` errors, a kind of `Va
 
 | Zone name | Error |
 | --- | --- |
+| `in-addr.arpa.` or `ip6.arpa.`, with no labels in front | `Invalid reverse zone '<zone>'. It has no address labels, so it names no network.` |
 | The first label before `.in-addr.arpa.` is not an octet, or an octet and a prefix length from 25 to 31, such as `300.1.in-addr.arpa.` or `0/32.2.0.192.in-addr.arpa.` | `Failed to parse the leftmost IPv4 label '<label>' in zone '<zone>' as an octet or slash-based netmask.` |
 | Another label before `.in-addr.arpa.` is not an octet, such as `300` in `1.300.in-addr.arpa.` | `AddressValueError: Octet 300 (> 255) not permitted in '300.1.0.0'` |
 | More than four labels before `.in-addr.arpa.`, such as `5.4.3.2.1.in-addr.arpa.` | `AddressValueError: Expected 4 octets in '1.2.3.4.5'` |

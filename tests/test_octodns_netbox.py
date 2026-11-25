@@ -659,3 +659,11 @@ def test_populate_fails_on_an_ipv6_zone_label_that_is_not_one_hex_digit():
     source = NetboxSource("netbox", url="http://netbox.example.com", token="t")
     with pytest.raises(ValueError, match="'00' must be one hex digit"):
         source.populate(Zone("00.ip6.arpa.", []))
+
+
+@pytest.mark.parametrize("zone_name", ["in-addr.arpa.", "ip6.arpa."])
+def test_populate_fails_on_a_reverse_zone_with_no_address_labels(zone_name):
+    # As above, the source stops before it asks NetBox anything.
+    source = NetboxSource("netbox", **SETTINGS)
+    with pytest.raises(ValueError, match="has no address labels"):
+        source.populate(Zone(zone_name, []))

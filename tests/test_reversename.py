@@ -76,6 +76,12 @@ class TestToNetworkIPv4:
         assert "Invalid reverse zone" in str(excinfo.value)
 
 
+@pytest.mark.parametrize("name", ["in-addr.arpa.", "ip6.arpa."])
+def test_to_network_fails_on_a_zone_with_no_address_labels(name):
+    with pytest.raises(ValueError, match=re.escape(f"'{name}'. It has no address")):
+        to_network(Zone(name, []))
+
+
 class TestToNetworkIPv6:
     def test_to_network_ipv6(self):
         zone_56 = Zone("4.3.2.1.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", [])

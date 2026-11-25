@@ -1,6 +1,5 @@
 import ipaddress
 import re
-from typing import cast
 
 from octodns.zone import Zone
 
@@ -16,11 +15,17 @@ _IPV6_LABEL = re.compile(r"^[0-9a-fA-F]$")
 
 
 def is_reverse(zone: Zone) -> bool:
-    return cast(str, zone.name).endswith((_IPV4_SUFFIX, _IPV6_SUFFIX))
+    # The leading dot makes in-addr.arpa. and ip6.arpa. reverse zones too.
+    return f".{zone.name}".endswith((_IPV4_SUFFIX, _IPV6_SUFFIX))
 
 
 def to_network(zone: Zone) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
     """The network whose addresses have their PTR records in the reverse zone."""
+    if f".{zone.name}" in (_IPV4_SUFFIX, _IPV6_SUFFIX):
+        raise ValueError(
+            f"Invalid reverse zone '{zone.name}'. "
+            "It has no address labels, so it names no network."
+        )
     if zone.name.endswith(_IPV4_SUFFIX):
         return to_network_v4(zone)
     if zone.name.endswith(_IPV6_SUFFIX):

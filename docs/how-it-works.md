@@ -180,6 +180,8 @@ The source gives the advice to read one VRF only when any VRF you pick gives the
 
 When the source cannot read a reverse zone name, it raises an error and sends no query.
 For example, `00.ip6.arpa.` has a label of two digits, and no rule gives a PTR name for its addresses.
+`in-addr.arpa.` and `ip6.arpa.` have no address labels, so they name no network.
+The source treats them as reverse zones, so it raises the error and sends no forward query for them.
 
 The source does not return an empty zone in that case.
 octoDNS compares the records of the source with the records of the target, and an empty zone would make it plan to delete every record in the target.
