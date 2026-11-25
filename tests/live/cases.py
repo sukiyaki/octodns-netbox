@@ -17,6 +17,7 @@ V6_100 = "0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa."  # /100
 V6_116 = f"{'0.' * 21}8.b.d.0.1.0.0.2.ip6.arpa."  # 2001:db8::/116
 V6_124 = f"0.0.0.0.0.0.1.{'0.' * 16}8.b.d.0.1.0.0.2.ip6.arpa."  # 2001:db8::1000:0/124
 V6_128 = f"1.0.0.0.1.{'0.' * 19}8.b.d.0.1.0.0.2.ip6.arpa."  # 2001:db8::1:1/128
+V6_15 = "0.0.0.0.5.1.0.0.8.b.d.0.1.0.0.2.ip6.arpa."  # 2001:db8:15::/64
 VRF_ZONES = ("example.com.", "2.0.192.in-addr.arpa.", "3.0.192.in-addr.arpa.")
 TAG_ZONES = ("example.org.", "5.0.192.in-addr.arpa.")
 
@@ -99,6 +100,45 @@ def cases(vrf_ids: dict[str, int]) -> list[Case]:
             (),
             {"populate_vrf_name": "no-such-vrf"},
             init_error="Failed to retrieve VRF information by name",
+        ),
+        Case(
+            "vrf-name-and-tags",
+            ("vrf-tags.example.", "12.0.192.in-addr.arpa."),
+            {
+                "populate_vrf_name": seed.TAGGED_VRF,
+                "populate_tags": ["dns", "external"],
+            },
+        ),
+        Case(
+            "vrf-name-shared",
+            (),
+            {"populate_vrf_name": seed.SHARED_VRF_NAME},
+            init_error="Failed to retrieve VRF information by name",
+        ),
+        # The /32 zone of 192.0.5.2, between two other addresses with names.
+        Case("ipv4-host", ("2.5.0.192.in-addr.arpa.",)),
+        # 192.0.4.4/31 holds 192.0.4.4 and 192.0.4.5, and not 192.0.4.3 or .6.
+        Case("classless-31", ("4/31.4.0.192.in-addr.arpa.",)),
+        Case("name-list", ("names.example.", "13.0.192.in-addr.arpa.")),
+        Case(
+            "name-list-multivalue-ptr",
+            ("13.0.192.in-addr.arpa.",),
+            {"multivalue_ptr": True},
+        ),
+        Case(
+            "dns-name-blank",
+            ("blank-field.example.", "14.0.192.in-addr.arpa."),
+            {"field_name": "dns_name"},
+        ),
+        # run.py sets NETBOX_TTL to "120" and NETBOX_POPULATE_SUBDOMAINS to
+        # "false".
+        Case(
+            "env-values",
+            ("env.example.", "15.0.192.in-addr.arpa.", V6_15),
+            {
+                "ttl": "env/NETBOX_TTL",
+                "populate_subdomains": "env/NETBOX_POPULATE_SUBDOMAINS",
+            },
         ),
     ]
 

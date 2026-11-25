@@ -1,0 +1,9 @@
+---
+'1':
+  ttl: 120
+  type: PTR
+  value: host.env.example.
+'2':
+  ttl: 120
+  type: PTR
+  value: deep.sub.env.example.

@@ -289,9 +289,15 @@ def test_populate_does_not_warn_about_vrfs_with_multivalue_ptr_or_one_vrf(caplog
     assert source_warnings(caplog) == []
 
 
-def test_init_fails_when_populate_vrf_name_is_not_in_netbox():
-    case = load_case("vrf-name-not-found")
-    assert [e["response"]["json"]["count"] for e in case["init"]] == [0]
+@pytest.mark.parametrize(
+    ("name", "vrfs_with_the_name"),
+    [("vrf-name-not-found", 0), ("vrf-name-shared", 2)],
+)
+def test_init_fails_unless_one_vrf_has_the_populate_vrf_name(name, vrfs_with_the_name):
+    case = load_case(name)
+    assert [e["response"]["json"]["count"] for e in case["init"]] == [
+        vrfs_with_the_name
+    ]
     with (
         replaying(case["init"]),
         pytest.raises(ValueError, match="Failed to retrieve VRF information by name"),

@@ -15,6 +15,11 @@ import requests
 MGMT_VRF = "mgmt"
 # A VRF that allows the same address twice, as anycast addresses need.
 ANYCAST_VRF = "anycast"
+# A VRF for the case that combines a VRF and tags. VRF mgmt stays out of it,
+# because the vrf-name fixture holds the count of IP addresses in VRF mgmt.
+TAGGED_VRF = "lab"
+# The name of two VRFs, which populate_vrf_name cannot resolve to one ID.
+SHARED_VRF_NAME = "shared"
 TAGS = ("dns", "external")
 
 PERF_FORWARD_ZONE = "perf.example.net."
@@ -237,6 +242,40 @@ IPS = (
     Ip("192.0.11.11/24", "İstanbul.idn-case.example"),
     Ip("192.0.11.12/24", "ıspanak.idn-case.example"),
     Ip("192.0.11.13/24", "DİYARBAKIR.idn-case.example"),
+    # Zones vrf-tags.example. and 12.0.192.in-addr.arpa.: VRF lab with tags
+    # dns and external. Only 192.0.12.1 is in VRF lab with both tags.
+    Ip(
+        "192.0.12.1/24",
+        "lab-dns-external.vrf-tags.example",
+        vrf=TAGGED_VRF,
+        tags=("dns", "external"),
+    ),
+    Ip(
+        "192.0.12.2/24",
+        "global-dns-external.vrf-tags.example",
+        tags=("dns", "external"),
+    ),
+    Ip("192.0.12.3/24", "lab-dns.vrf-tags.example", vrf=TAGGED_VRF, tags=("dns",)),
+    Ip(
+        "192.0.12.4/24",
+        "lab-external.vrf-tags.example",
+        vrf=TAGGED_VRF,
+        tags=("external",),
+    ),
+    # Zones names.example. and 13.0.192.in-addr.arpa.: name lists with spaces
+    # around commas, empty entries, and names with and without the final dot.
+    Ip("192.0.13.1/24", "one.names.example. , ,two.names.example"),
+    Ip("192.0.13.2/24", ",three.names.example , four.names.example.,"),
+    # Zones blank-field.example. and 14.0.192.in-addr.arpa.: 192.0.14.1 has a
+    # description in the zone and no DNS name.
+    Ip("192.0.14.1/24", "described.blank-field.example"),
+    Ip("192.0.14.2/24", dns_name="named.blank-field.example"),
+    # Zones env.example., 15.0.192.in-addr.arpa., and 2001:db8:15::/64: one
+    # name one label below the zone and one name in a subdomain of it.
+    Ip("192.0.15.1/24", "host.env.example"),
+    Ip("192.0.15.2/24", "deep.sub.env.example"),
+    Ip("2001:db8:15::1/64", "host.env.example"),
+    Ip("2001:db8:15::2/64", "deep.sub.env.example"),
 )
 
 
@@ -286,11 +325,17 @@ def auth_header(token: str, version: int) -> str:
 
 
 def seed(netbox: NetBox) -> dict[str, int]:
-    """Create the VRF, tags and addresses. Returns VRF IDs by name."""
+    """Create the VRFs, tags and addresses. Returns VRF IDs by name."""
     vrf = netbox.post("ipam/vrfs/", {"name": MGMT_VRF})
     netbox.post("extras/tags/", [{"name": tag, "slug": tag} for tag in TAGS])
     anycast = netbox.post("ipam/vrfs/", {"name": ANYCAST_VRF, "enforce_unique": False})
-    vrf_ids = {MGMT_VRF: vrf["id"], ANYCAST_VRF: anycast["id"]}
+    tagged = netbox.post("ipam/vrfs/", {"name": TAGGED_VRF})
+    netbox.post("ipam/vrfs/", [{"name": SHARED_VRF_NAME}] * 2)
+    vrf_ids = {
+        MGMT_VRF: vrf["id"],
+        ANYCAST_VRF: anycast["id"],
+        TAGGED_VRF: tagged["id"],
+    }
     netbox.post(
         "ipam/ip-addresses/",
         [

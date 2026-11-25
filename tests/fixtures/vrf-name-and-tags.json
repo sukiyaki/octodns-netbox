@@ -1,0 +1,207 @@
+{
+  "source": {
+    "url": "http://netbox.example.com",
+    "populate_vrf_name": "lab",
+    "populate_tags": [
+      "dns",
+      "external"
+    ]
+  },
+  "init": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "http://netbox.example.com/api/ipam/vrfs/?name=lab&limit=0"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "count": 1,
+          "next": null,
+          "previous": null,
+          "results": [
+            {
+              "id": 3,
+              "url": "http://netbox.example.com/api/ipam/vrfs/3/",
+              "display_url": "http://netbox.example.com/ipam/vrfs/3/",
+              "display": "lab",
+              "name": "lab",
+              "rd": null,
+              "tenant": null,
+              "enforce_unique": true,
+              "description": "",
+              "owner": null,
+              "comments": "",
+              "import_targets": [],
+              "export_targets": [],
+              "tags": [],
+              "custom_fields": {},
+              "created": "2000-01-01T00:00:00.000000Z",
+              "last_updated": "2000-01-01T00:00:00.000000Z",
+              "ipaddress_count": 3,
+              "prefix_count": 0
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "zones": {
+    "vrf-tags.example.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__ic=vrf-tags.example&vrf_id=3&tag=dns&tag=external&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 1,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 71,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/71/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/71/",
+                  "display": "192.0.12.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.12.1/24",
+                  "vrf": {
+                    "id": 3,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/3/",
+                    "display": "lab",
+                    "name": "lab",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "lab-dns-external.vrf-tags.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [
+                    {
+                      "id": 1,
+                      "url": "http://netbox.example.com/api/extras/tags/1/",
+                      "display_url": "http://netbox.example.com/extras/tags/1/",
+                      "display": "dns",
+                      "name": "dns",
+                      "slug": "dns",
+                      "color": "9e9e9e"
+                    },
+                    {
+                      "id": 2,
+                      "url": "http://netbox.example.com/api/extras/tags/2/",
+                      "display_url": "http://netbox.example.com/extras/tags/2/",
+                      "display": "external",
+                      "name": "external",
+                      "slug": "external",
+                      "color": "9e9e9e"
+                    }
+                  ],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "12.0.192.in-addr.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=192.0.12.0%2F24&family=4&vrf_id=3&tag=dns&tag=external&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 1,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 71,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/71/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/71/",
+                  "display": "192.0.12.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.12.1/24",
+                  "vrf": {
+                    "id": 3,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/3/",
+                    "display": "lab",
+                    "name": "lab",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "lab-dns-external.vrf-tags.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [
+                    {
+                      "id": 1,
+                      "url": "http://netbox.example.com/api/extras/tags/1/",
+                      "display_url": "http://netbox.example.com/extras/tags/1/",
+                      "display": "dns",
+                      "name": "dns",
+                      "slug": "dns",
+                      "color": "9e9e9e"
+                    },
+                    {
+                      "id": 2,
+                      "url": "http://netbox.example.com/api/extras/tags/2/",
+                      "display_url": "http://netbox.example.com/extras/tags/2/",
+                      "display": "external",
+                      "name": "external",
+                      "slug": "external",
+                      "color": "9e9e9e"
+                    }
+                  ],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,5 @@
+---
+named:
+  ttl: 60
+  type: A
+  value: 192.0.14.2

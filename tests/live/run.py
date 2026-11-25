@@ -34,8 +34,9 @@ these files:
     zones/<case>/<zone>yaml  the dumped zones
     misspelled-key/          the zones dumped with the misspelled key
     fixtures/<case>.json     the recorded responses
-    configs/<case>.yaml      the octoDNS configs (NETBOX_URL, NETBOX_API_URL
-                             and NETBOX_TOKEN come from the environment)
+    configs/<case>.yaml      the octoDNS configs (NETBOX_URL, NETBOX_API_URL,
+                             NETBOX_TOKEN, and the values of the env-values
+                             case come from the environment)
     perf.json                HTTP requests per zone populate, dump timings
     run.json                 versions, durations, result, errors, fixtures
     diff.txt                 differences from the expected zones
@@ -482,6 +483,8 @@ def check_netbox(
 
     os.environ["NETBOX_URL"] = url
     os.environ["NETBOX_API_URL"] = f"{url}/api/"
+    os.environ["NETBOX_TTL"] = "120"
+    os.environ["NETBOX_POPULATE_SUBDOMAINS"] = "false"
     os.environ["NETBOX_TOKEN"] = token
     live_cases = cases.cases(vrf_ids)
     with _timed(durations, "dump"):

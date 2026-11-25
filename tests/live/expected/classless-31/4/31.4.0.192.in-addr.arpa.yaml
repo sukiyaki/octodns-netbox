@@ -1,0 +1,9 @@
+---
+'4':
+  ttl: 60
+  type: PTR
+  value: subdomain1.example.com.
+'5':
+  ttl: 60
+  type: PTR
+  value: description-roundrobin.example.com.

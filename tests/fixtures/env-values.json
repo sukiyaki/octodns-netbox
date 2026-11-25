@@ -1,0 +1,321 @@
+{
+  "source": {
+    "url": "http://netbox.example.com",
+    "ttl": "120",
+    "populate_subdomains": "false"
+  },
+  "init": [],
+  "zones": {
+    "env.example.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__ic=env.example&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 4,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 79,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/79/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/79/",
+                  "display": "192.0.15.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.15.1/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host.env.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 80,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/80/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/80/",
+                  "display": "192.0.15.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.15.2/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "deep.sub.env.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 81,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/81/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/81/",
+                  "display": "2001:db8:15::1/64",
+                  "family": {
+                    "value": 6,
+                    "label": "IPv6"
+                  },
+                  "address": "2001:db8:15::1/64",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host.env.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 82,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/82/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/82/",
+                  "display": "2001:db8:15::2/64",
+                  "family": {
+                    "value": 6,
+                    "label": "IPv6"
+                  },
+                  "address": "2001:db8:15::2/64",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "deep.sub.env.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "15.0.192.in-addr.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=192.0.15.0%2F24&family=4&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 2,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 79,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/79/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/79/",
+                  "display": "192.0.15.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.15.1/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host.env.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 80,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/80/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/80/",
+                  "display": "192.0.15.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.15.2/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "deep.sub.env.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "0.0.0.0.5.1.0.0.8.b.d.0.1.0.0.2.ip6.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=2001%3Adb8%3A15%3A%3A%2F64&family=6&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 2,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 81,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/81/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/81/",
+                  "display": "2001:db8:15::1/64",
+                  "family": {
+                    "value": 6,
+                    "label": "IPv6"
+                  },
+                  "address": "2001:db8:15::1/64",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host.env.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 82,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/82/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/82/",
+                  "display": "2001:db8:15::2/64",
+                  "family": {
+                    "value": 6,
+                    "label": "IPv6"
+                  },
+                  "address": "2001:db8:15::2/64",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "deep.sub.env.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

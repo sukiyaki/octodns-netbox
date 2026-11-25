@@ -1,0 +1,5 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  value: lab-dns-external.vrf-tags.example.

@@ -1,0 +1,9 @@
+---
+1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0:
+  ttl: 120
+  type: PTR
+  value: host.env.example.
+2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0:
+  ttl: 120
+  type: PTR
+  value: deep.sub.env.example.
