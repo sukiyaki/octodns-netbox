@@ -56,6 +56,22 @@ The unit tests replay the NetBox responses in `tests/fixtures/` and compare the 
 The unit tests need no network.
 The run fails when coverage is below 100%.
 
+### Run the property tests with more examples
+
+`tests/test_properties.py` checks properties of the source with NetBox data that [Hypothesis](https://hypothesis.readthedocs.io/) generates: populate gives records or a documented error, an IP address with a name that the source can use gets its record next to any other IP addresses, each record passes octoDNS's validation inside its zone, a zone written by `YamlProvider` gives no change on the next run, and the order of the IP addresses does not change the zone.
+`uv run --locked pytest` runs them with the `ci` profile in `tests/conftest.py`.
+That profile runs 50 examples for each zone, the same examples on every run, without a deadline, so CI is short and a failure reproduces on any machine.
+
+To run 2000 examples for each zone, with new data on each run:
+
+```sh
+uv run --locked pytest tests/test_properties.py --hypothesis-profile=thorough
+```
+
+The run takes more than ten minutes.
+Hypothesis keeps each failing example in `.hypothesis/`, which Git ignores, and tries it first on the next run.
+To report a failure, copy the falsifying example that pytest prints.
+
 ## Test the lowest dependency versions
 
 The `lowest` job in CI installs each direct dependency at its lower bound, on Python 3.11.

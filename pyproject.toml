@@ -47,6 +47,7 @@ Issues = "https://github.com/sukiyaki/octodns-netbox/issues"
 [dependency-groups]
 dev = [
   "coverage-conditional-plugin>=0.9.0",
+  "hypothesis>=6.141.0",
   "mypy>=2.4.1",
   "pre-commit>=4.0.0",
   "pre-commit-hooks>=6.0.0",
