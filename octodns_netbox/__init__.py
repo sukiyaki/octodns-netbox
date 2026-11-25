@@ -23,6 +23,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     ModelWrapValidatorHandler,
+    NonNegativeInt,
     TypeAdapter,
     ValidationError,
     ValidationInfo,
@@ -130,7 +131,7 @@ class NetboxSourceConfig(BaseModel):
     populate_vrf_name: str | None = None
     populate_subdomains: bool = True
     multivalue_ptr: bool = False
-    ttl: int = 60
+    ttl: NonNegativeInt = 60
     ssl_verify: bool = True
 
     @field_validator("url", mode="before")
@@ -178,11 +179,27 @@ class NetboxSourceConfig(BaseModel):
             )
         return token
 
+    @field_validator("populate_vrf_id", "ttl", mode="before")
+    @classmethod
+    def number_not_bool(cls, value: Any) -> Any:
+        """pydantic takes a bool as an int, so true would be 1."""
+        if isinstance(value, bool):
+            raise ValueError("Write a number, not true or false.")
+        return value
+
     @field_validator("populate_vrf_name")
     @classmethod
     def validate_one_vrf(cls, value: str | None, info: ValidationInfo) -> str | None:
         if value is not None and info.data.get("populate_vrf_id") is not None:
             raise ValueError("Do not set both populate_vrf_id and populate_vrf_name.")
+        return value
+
+    @field_validator("populate_vrf_name")
+    @classmethod
+    def vrf_name_not_blank(cls, value: str | None) -> str | None:
+        """NetBox ignores a blank name filter, and returns every VRF."""
+        if value is not None and not value.strip():
+            raise ValueError("Write the name of a VRF.")
         return value
 
     @model_validator(mode="wrap")

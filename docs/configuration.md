@@ -42,7 +42,7 @@ zones:
 | [`populate_vrf_name`](#populate_vrf_name) | string | not set | Read only the IP addresses in the VRF with this name. |
 | [`populate_subdomains`](#populate_subdomains) | boolean | `true` | Create records for names in subdomains of the zone. |
 | [`multivalue_ptr`](#multivalue_ptr) | boolean | `false` | Give a PTR record every name of the IP address, not only the first. |
-| [`ttl`](#ttl) | integer | `60` | The TTL of every record, in seconds. |
+| [`ttl`](#ttl) | integer, 0 or more | `60` | The TTL of every record, in seconds. |
 | [`ssl_verify`](#ssl_verify) | boolean | `true` | Verify the TLS certificate of NetBox. |
 
 octoDNS replaces a value of the form `env/NAME` with the value of the environment variable `NAME`.
@@ -136,6 +136,7 @@ The source reads only the IP addresses in that VRF.
 `0` and the string `"null"` select the Global VRF, which holds the IP addresses that have no VRF.
 Quote `"null"`.
 Unquoted `null` is a YAML null, which leaves the key unset.
+`true` and `false` are not IDs, and stop the source at startup with a pydantic `ValidationError` on `populate_vrf_id`.
 
 When the key is not set, the source reads the IP addresses in every VRF.
 
@@ -147,6 +148,8 @@ At startup, the source asks NetBox for the VRF with this name and uses its ID.
 `Global`, with a capital G, selects the Global VRF without a request to NetBox.
 
 The source stops at startup if no VRF or more than one VRF has the name.
+It also stops if the name is empty or holds only whitespace, with a pydantic `ValidationError` on `populate_vrf_name`.
+NetBox ignores such a name filter and returns every VRF, so the source would read the only VRF of a NetBox that has one.
 Use `populate_vrf_id` when several VRFs share a name.
 
 Do not set both `populate_vrf_id` and `populate_vrf_name`.
@@ -169,6 +172,7 @@ See [Create PTR records](reverse-zones.md#fix-a-ptr-record-with-values-from-two-
 ### `ttl`
 
 The TTL, in seconds, of every record that the source creates.
+A negative TTL, `true`, or `false` stops the source at startup with a pydantic `ValidationError` on `ttl`.
 
 ### `ssl_verify`
 
@@ -197,6 +201,7 @@ octoDNS stops loading the config when the source raises one of these errors.
 | A value has the wrong type, or `url` has no scheme | pydantic `ValidationError` that names the key |
 | `url` holds a user name or a password | pydantic `ValidationError` that names `url` |
 | `token` holds whitespace that is not at its start or end, or a character that is not printable or not ASCII | pydantic `ValidationError` that names `token` |
+| `ttl` is negative, `ttl` or `populate_vrf_id` is `true` or `false`, or `populate_vrf_name` is empty or holds only whitespace | pydantic `ValidationError` that names the key |
 | Both VRF keys are set | `Do not set both populate_vrf_id and populate_vrf_name.` |
 | No VRF, or more than one VRF, has the name in `populate_vrf_name` | `Failed to retrieve VRF information by name '<name>'. Use a valid populate_vrf_id instead.` |
 

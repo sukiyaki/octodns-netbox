@@ -127,6 +127,42 @@ def test_init_rejects_a_value_of_the_wrong_type(key, value):
     assert rejected_keys(**{**SETTINGS, key: value}) == {key}
 
 
+@pytest.mark.parametrize("key", ["ttl", "populate_vrf_id"])
+@pytest.mark.parametrize("value", [True, False])
+def test_init_rejects_true_or_false_as_a_number(key, value):
+    # pydantic takes a bool as an int, so true would be TTL or VRF ID 1.
+    assert rejected_keys(**{**SETTINGS, key: value}) == {key}
+
+
+@pytest.mark.parametrize("value", [-1, "-1"])
+def test_init_rejects_a_negative_ttl(value):
+    assert rejected_keys(**{**SETTINGS, "ttl": value}) == {"ttl"}
+
+
+@pytest.mark.parametrize("value", ["", " ", "\t"])
+def test_init_rejects_a_blank_populate_vrf_name(value):
+    # NetBox ignores a blank name filter, and would return every VRF.
+    assert rejected_keys(**{**SETTINGS, "populate_vrf_name": value}) == {
+        "populate_vrf_name"
+    }
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "parsed"),
+    [
+        ("ttl", 0, 0),
+        # Values from env/ arrive as strings or numbers.
+        ("ttl", "120", 120),
+        ("ttl", 120.0, 120),
+        ("populate_vrf_id", "5", 5),
+        ("populate_subdomains", "false", False),
+    ],
+)
+def test_init_converts_a_value_from_env_to_the_type_of_the_key(key, value, parsed):
+    source = NetboxSource("netbox", **SETTINGS, **{key: value})
+    assert getattr(source.config, key) == parsed
+
+
 def test_init_rejects_both_populate_vrf_id_and_populate_vrf_name():
     with pytest.raises(ValidationError, match="Do not set both populate_vrf_id"):
         NetboxSource("netbox", **SETTINGS, populate_vrf_id=1, populate_vrf_name="mgmt")
@@ -167,6 +203,10 @@ def pieces_in(text, values):
         pytest.param(
             {"url": SETTINGS["url"], "token": TOKEN, "ttl": "ttl-value"},
             id="wrong-type",
+        ),
+        pytest.param(
+            {"url": SETTINGS["url"], "token": TOKEN, "ttl": "-123456789"},
+            id="negative-ttl",
         ),
         pytest.param(
             {"url": "http://netbox-user:S3cretOfTheUrl@netbox.example", "token": TOKEN},
