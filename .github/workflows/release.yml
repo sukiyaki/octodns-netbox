@@ -52,6 +52,9 @@ jobs:
       with:
         name: dist
         path: dist/
+    # A rerun of this job uploads the same files again. PyPI reports success
+    # for a file that it has with the same contents, and adds the rest.
+    # skip-existing would also pass over a file that differs from PyPI's copy.
     - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
 
   github-release:

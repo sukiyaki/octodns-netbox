@@ -206,15 +206,40 @@ The action also creates the attestations of both files.
 The workflow pins the action to a commit, but the action runs the container image `ghcr.io/pypa/gh-action-pypi-publish:<commit>`, and the maintainers of the action can push a new image under that tag.
 Apart from the runner image `ubuntu-latest`, that tag is the one reference in the `pypi` job that can change.
 
-If the workflow stops before the `pypi` job uploads the files, delete the tag, fix the problem, and tag again:
+### Finish a release after a job fails
+
+The page of the version on PyPI, such as `https://pypi.org/project/octodns-netbox/0.6.0/#files`, lists the files that PyPI has.
+
+If the workflow stops before PyPI has a file of the version, delete the tag, fix the problem, and tag again:
 
 ```sh
 git push origin --delete v0.6.0
 git tag --delete v0.6.0
 ```
 
-After PyPI has the version, do not delete or move the tag.
-Release the fix as the next version.
+After PyPI has a file of the version, do not delete or move the tag.
+If the `pypi` job fails after PyPI has one of the files, or the `github-release` job fails, re-run the failed jobs of the run:
+
+```sh
+gh run list --workflow release.yml
+gh run rerun <run-id> --failed
+```
+
+On the page of the run, **Re-run failed jobs** in the **Re-run jobs** menu does the same.
+GitHub lets you re-run the jobs of a run for 30 days after the run starts.
+
+- The `build` job does not run again, so the other jobs take the wheel and the sdist from the `dist` artifact that it made.
+- The `pypi` job uploads both files again.
+  For a file that PyPI already has with the same contents, PyPI reports success and keeps its copy.
+  PyPI adds the files that it does not have.
+- The `github-release` job runs after the `pypi` job.
+  If an earlier attempt created the GitHub release, the job replaces the files of that release.
+
+Do not use **Re-run all jobs**.
+It builds the files again, and PyPI rejects a file whose name it has with other contents.
+The `pypi` job does not set `skip-existing`, so a file that differs from the copy on PyPI stops the job, and the GitHub release never gets that file.
+
+If the `pypi` job fails again after PyPI has a file of the version, for example because PyPI rejects the sdist, release the fix as the next version.
 
 ## Update dependencies
 
