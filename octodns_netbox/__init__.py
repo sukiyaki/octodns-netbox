@@ -146,6 +146,38 @@ class NetboxSourceConfig(BaseModel):
             raise ValueError("Remove the user name and password from the URL.")
         return re.sub(r"/api/?$", "", str(url))
 
+    @field_validator("token", mode="before")
+    @classmethod
+    def token_as_written(cls, value: Any) -> Any:
+        """An int is a token of digits that octoDNS read from env/.
+
+        octoDNS drops the zeros at the start of the digits. A v1 token has 40
+        characters, so 40 digits give the token back.
+        """
+        if type(value) is int:
+            return f"{value:040d}"
+        return value
+
+    @field_validator("token")
+    @classmethod
+    def token_without_whitespace(cls, value: str) -> str:
+        """Remove the whitespace around the token.
+
+        A Kubernetes Secret often ends in a line break, and a .env file with
+        CRLF line ends leaves a carriage return. requests and http.client
+        refuse such a header, with an error that holds the whole token.
+        A NetBox token is ASCII. http.client sends a header in Latin-1, and its
+        UnicodeEncodeError for a character outside Latin-1 holds the whole
+        header too.
+        """
+        token = value.strip()
+        if " " in token or not token.isprintable() or not token.isascii():
+            raise ValueError(
+                "The token holds whitespace, or a character that is not printable "
+                "or not ASCII."
+            )
+        return token
+
     @field_validator("populate_vrf_name")
     @classmethod
     def validate_one_vrf(cls, value: str | None, info: ValidationInfo) -> str | None:

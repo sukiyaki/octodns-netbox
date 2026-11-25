@@ -46,7 +46,8 @@ zones:
 | [`ssl_verify`](#ssl_verify) | boolean | `true` | Verify the TLS certificate of NetBox. |
 
 octoDNS replaces a value of the form `env/NAME` with the value of the environment variable `NAME`.
-The value is a string, and the source converts it to the type of the key: `ttl: env/NETBOX_TTL` with `NETBOX_TTL=120` sets the TTL to 120.
+octoDNS turns a value that is a number, such as `120`, into a number, and keeps any other value as a string.
+The source converts the value to the type of the key: `ttl: env/NETBOX_TTL` with `NETBOX_TTL=120` sets the TTL to 120.
 This works for every key except `populate_tags`.
 `populate_tags` takes a list, and octoDNS does not replace `env/NAME` inside a list, so write the tags in the config.
 
@@ -78,6 +79,17 @@ When NetBox redirects a request to another host, the source sends the redirected
 
 Write a v2 token whole, with the `nbt_` prefix.
 Every supported pynetbox release, 7.4.1 included, sends both formats to NetBox.
+
+The source removes the whitespace around the token, such as the line break at the end of a Kubernetes Secret, or the carriage return that a `.env` file with CRLF line ends leaves at the end of each value.
+A token that still holds whitespace, a character that is not printable, such as a control character, or a character that is not ASCII, such as `é`, stops the source at startup with a pydantic `ValidationError` on `token`.
+
+A v1 token is hexadecimal, so some v1 tokens hold only digits.
+octoDNS turns such an `env/` value into a number, which loses the zeros at its start.
+The source writes the number back with 40 digits, the length of a v1 token, so the token is the same.
+
+Put quotes around a token that you write in the config itself, such as `token: '0123456701234567012345670123456701234567'`.
+Without quotes, YAML reads a token of digits that starts with `0` and holds no `8` or `9` as an octal number.
+The source would then send other digits, and NetBox would refuse each request.
 
 ### `field_name`
 
@@ -181,6 +193,7 @@ octoDNS stops loading the config when the source raises one of these errors.
 | `url` or `token` is missing | pydantic `ValidationError` that names the key |
 | A value has the wrong type, or `url` has no scheme | pydantic `ValidationError` that names the key |
 | `url` holds a user name or a password | pydantic `ValidationError` that names `url` |
+| `token` holds whitespace that is not at its start or end, or a character that is not printable or not ASCII | pydantic `ValidationError` that names `token` |
 | Both VRF keys are set | `Do not set both populate_vrf_id and populate_vrf_name.` |
 | No VRF, or more than one VRF, has the name in `populate_vrf_name` | `Failed to retrieve VRF information by name '<name>'. Use a valid populate_vrf_id instead.` |
 

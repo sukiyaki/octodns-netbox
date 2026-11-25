@@ -157,6 +157,14 @@ TOKEN = "nbt_K3yOfTheTest.S3cretOfTheTest0123456789"
             {"url": "http://netbox-user:S3cretOfTheUrl@netbox.example", "token": TOKEN},
             id="url-with-password",
         ),
+        pytest.param(
+            {"url": SETTINGS["url"], "token": TOKEN.replace(".", "\n.")},
+            id="token-with-line-break",
+        ),
+        pytest.param(
+            {"url": SETTINGS["url"], "token": TOKEN.replace(".", "☃.")},
+            id="token-not-ascii",
+        ),
     ],
 )
 def test_init_error_contains_no_value_of_a_setting(settings):
@@ -264,6 +272,64 @@ def test_a_redirect_sends_the_token_only_to_the_same_host(
     assert first.headers.get("Authorization") == f"Token {V1_TOKEN}"
     assert redirected.url == moved
     assert redirected.headers.get("Authorization") == authorization
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        # A Kubernetes Secret, and a .env file with CRLF line ends.
+        f"{V1_TOKEN}\n",
+        f"{V1_TOKEN}\r\n",
+        f" \t{V1_TOKEN} ",
+    ],
+)
+def test_each_request_sends_the_token_without_the_whitespace_around_it(token):
+    case = load_case("vrf-name")
+    zone_name = "3.0.192.in-addr.arpa."
+    exchanges = case["init"] + case["zones"][zone_name]["exchanges"]
+    with replaying(exchanges) as mock:
+        source = NetboxSource("netbox", token=token, **case["source"])
+        source.populate(Zone(zone_name, []))
+    sent = [request.headers.get("Authorization") for request in mock.request_history]
+    assert sent == [f"Token {V1_TOKEN}"] * 2
+
+
+@pytest.mark.parametrize("token", ["1234567890" * 4, "0012345678" * 4])
+def test_a_token_of_digits_from_env_is_sent_as_written(tmp_path, monkeypatch, token):
+    # octoDNS turns an env/ value of digits into an int.
+    monkeypatch.setenv("NETBOX_TOKEN", token)
+    case = load_case("vrf-name")
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "providers:\n"
+        "  netbox:\n"
+        "    class: octodns_netbox.NetboxSource\n"
+        f"    url: {case['source']['url']}\n"
+        "    token: env/NETBOX_TOKEN\n"
+        f"    populate_vrf_name: {case['source']['populate_vrf_name']}\n"
+        "zones: {}\n"
+    )
+    with replaying(case["init"]) as mock:
+        Manager(str(config))
+    (request,) = mock.request_history
+    assert request.headers.get("Authorization") == f"Token {token}"
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        f"{V1_TOKEN[:20]} {V1_TOKEN[20:]}",
+        f"{V1_TOKEN[:20]}\n{V1_TOKEN[20:]}",
+        f"{V1_TOKEN[:20]}\x00{V1_TOKEN[20:]}",
+        f"{V1_TOKEN}\x7f",
+        # Printable, but not ASCII as a NetBox token is. http.client sends é in
+        # Latin-1, and cannot send ☃.
+        f"{V1_TOKEN[:20]}é{V1_TOKEN[20:]}",
+        f"{V1_TOKEN}☃",
+    ],
+)
+def test_init_rejects_a_token_that_http_cannot_send(token):
+    assert rejected_keys(url=SETTINGS["url"], token=token) == {"token"}
 
 
 @pytest.mark.parametrize(
