@@ -305,6 +305,13 @@ IPS = (
     Ip("192.0.19.3/24", "www.leading-dot.example, .www.leading-dot.example"),
     Ip("192.0.19.4/24", "a..leading-dot.example"),
     Ip("192.0.19.5/24", "www\uff0e.leading-dot.example"),
+    # Zones strict-subzone.example. and lab.strict-subzone.example.: a name
+    # that octoDNS rejects inside the sub-zone.
+    Ip("192.0.20.1/24", "www.strict-subzone.example"),
+    Ip(
+        "192.0.20.2/24",
+        "host.lab.strict-subzone.example, see wiki.lab.strict-subzone.example",
+    ),
 )
 
 

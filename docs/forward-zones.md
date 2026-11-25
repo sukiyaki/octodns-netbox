@@ -208,4 +208,13 @@ description-host2:
 ```
 
 Zone `example.com.` gets the record `description-host2.subdomain2`, but no record for the names in `subdomain1.example.com.`.
-For each record that it leaves out, the source logs a warning that starts with `Skipping subzone record:`.
+For each record that it leaves out, the source logs a warning that starts with `Skipping subzone record:`:
+
+```text
+Skipping subzone record: description-host2.subdomain1.example.com. A, which zone subdomain1.example.com. holds
+```
+
+The source leaves out these names before it checks them.
+A name in `subdomain1.example.com.` that octoDNS rejects, or that the source cannot use, such as `a..subdomain1.example.com` with its empty label, therefore gives only this warning in zone `example.com.`, and the warning that names the reason in zone `subdomain1.example.com.`.
+The source leaves out the names also when the zone is lenient, where octoDNS would add the records to `example.com.`.
+A reverse zone leaves out the PTR records of a configured reverse zone inside it in the same way.

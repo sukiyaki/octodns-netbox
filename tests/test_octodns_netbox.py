@@ -566,16 +566,91 @@ def test_init_fails_unless_one_vrf_has_the_populate_vrf_name(name, vrfs_with_the
         NetboxSource("netbox", token="not-recorded", **case["source"])
 
 
-def test_populate_warns_once_for_each_record_inside_a_configured_subzone(caplog):
-    case = load_case("subzones")
-    assert case["zones"]["example.com."]["sub_zones"] == ["subdomain1"]
-    populate(connect(case), case, "example.com.")
-    # Zone example.com. leaves out the records of zone subdomain1.example.com.
-    left_out = expected_zone("subzones", "subdomain1.example.com.", []).records
-    assert len(left_out) == 3
-    assert sorted(source_warnings(caplog)) == sorted(
-        f"Skipping subzone record: {record!r}" for record in left_out
+@pytest.mark.parametrize("lenient", [False, True])
+@pytest.mark.parametrize(
+    ("name", "zone_name", "sub_zone", "left_out"),
+    [
+        (
+            "subzones",
+            "example.com.",
+            "subdomain1.example.com.",
+            [
+                ("description-host2.subdomain1.example.com.", "A"),
+                ("description-host2.subdomain1.example.com.", "AAAA"),
+                ("subdomain1.example.com.", "A"),
+            ],
+        ),
+        # octoDNS rejects the record name "see wiki". The source leaves the
+        # name out of the parent zone before it checks it.
+        (
+            "subzone-unusable",
+            "strict-subzone.example.",
+            "lab.strict-subzone.example.",
+            [
+                ("host.lab.strict-subzone.example.", "A"),
+                ("see wiki.lab.strict-subzone.example.", "A"),
+            ],
+        ),
+    ],
+)
+def test_populate_warns_once_for_each_record_inside_a_configured_subzone(
+    caplog, name, zone_name, sub_zone, left_out, lenient
+):
+    # A lenient octoDNS adds the records of a sub-zone to the parent zone.
+    case = load_case(name)
+    sub_zones = case["zones"][zone_name]["sub_zones"]
+    assert [f"{sub}.{zone_name}" for sub in sub_zones] == [sub_zone]
+    zone = populate(connect(case), case, zone_name, lenient=lenient)
+    expected = expected_zone(name, zone_name, sub_zones)
+    assert expected.changes(zone, SimpleProvider()) == []
+    assert sorted(source_warnings(caplog)) == [
+        f"Skipping subzone record: {fqdn} {record_type}, which zone {sub_zone} holds"
+        for fqdn, record_type in left_out
+    ]
+
+
+@pytest.mark.parametrize("lenient", [False, True])
+def test_populate_leaves_a_name_that_it_cannot_use_to_its_subzone(caplog, lenient):
+    # a\u200db has no IDNA form, and a..lab has an empty label. Zone
+    # lab.strict-subzone.example. checks them, so the parent warns only that
+    # it leaves them out.
+    case = load_case("subzone-unusable")
+    zone_name = "strict-subzone.example."
+    (exchange,) = case["zones"][zone_name]["exchanges"]
+    (row,) = [
+        ip
+        for ip in exchange["response"]["json"]["results"]
+        if ip["address"] == "192.0.20.2/24"
+    ]
+    row["description"] = (
+        "a\u200db.lab.strict-subzone.example, a..lab.strict-subzone.example"
     )
+    zone = populate(connect(case), case, zone_name, lenient=lenient)
+    expected = expected_zone("subzone-unusable", zone_name, ["lab"])
+    assert expected.changes(zone, SimpleProvider()) == []
+    assert source_warnings(caplog) == [
+        f"Skipping subzone record: {fqdn} A, "
+        "which zone lab.strict-subzone.example. holds"
+        for fqdn in [
+            "a\u200db.lab.strict-subzone.example.",
+            "a..lab.strict-subzone.example.",
+        ]
+    ]
+
+
+@pytest.mark.parametrize("lenient", [False, True])
+def test_populate_leaves_the_ptr_record_of_a_configured_subzone_out(caplog, lenient):
+    # Zones 5.0.192.in-addr.arpa. and 2.5.0.192.in-addr.arpa. in one config.
+    # The live cases custom-ttl and ipv4-host dump them one at a time.
+    case = load_case("custom-ttl")
+    zone = Zone("5.0.192.in-addr.arpa.", ["2"])
+    with replaying(case["zones"][zone.name]["exchanges"]):
+        connect(case).populate(zone, lenient=lenient)
+    assert sorted(record.name for record in zone.records) == ["1", "3"]
+    assert source_warnings(caplog) == [
+        "Skipping subzone record: 2.5.0.192.in-addr.arpa. PTR, "
+        "which zone 2.5.0.192.in-addr.arpa. holds"
+    ]
 
 
 def test_populate_skips_fqdn_that_only_shares_the_zone_suffix():

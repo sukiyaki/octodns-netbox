@@ -18,7 +18,7 @@ from octodns.idna import IdnaError, idna_encode
 from octodns.record import Record
 from octodns.record.exception import ValidationError as InvalidRecord
 from octodns.source.base import BaseSource
-from octodns.zone import SubzoneRecordException, Zone
+from octodns.zone import Zone
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
@@ -309,10 +309,7 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
             if rr.rdata not in values:
                 values.append(rr.rdata)
         for record in _octodns_records(zone, rdatas, self.config.ttl, lenient):
-            try:
-                zone.add_record(record, lenient=lenient)
-            except SubzoneRecordException:
-                self.log.warning("Skipping subzone record: %s", record)
+            zone.add_record(record, lenient=lenient)
         self.log.info(
             "Populated %s new records in zone %s", len(zone.records) - before, zone.name
         )
@@ -328,6 +325,7 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
             }
         )
         records: list[ResourceRecord] = []
+        in_sub_zones: dict[tuple[str, str], str] = {}
         # The VRF, as (ID, name), and the first value of each NetBox IP
         # address that gave a value, by PTR name and address.
         sources: dict[
@@ -338,6 +336,10 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
             ptr_name = reversename.from_address(zone, ip_address)
+            sub_zone = _sub_zone(zone, ptr_name)
+            if sub_zone:
+                in_sub_zones.setdefault((ptr_name, "PTR"), sub_zone)
+                continue
             names = _names(ipam_record[field_name])
             if not self.config.multivalue_ptr:
                 names = names[:1]
@@ -353,6 +355,7 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 nb_vrf = ipam_record.vrf
                 vrf = (nb_vrf.id, nb_vrf.name) if nb_vrf else (None, "Global")
                 sources[(ptr_name, ip_address)].append((vrf, fqdns[0]))
+        self._skip_sub_zone_records(in_sub_zones)
         if not self.config.multivalue_ptr:
             for (ptr_name, ip_address), values in sources.items():
                 names_by_vrf: dict[tuple[int | None, str], set[str]]
@@ -379,13 +382,23 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
         field_name = self.config.field_name
         ipam_records = self._ip_addresses({f"{field_name}__ic": zone.name.rstrip(".")})
         records: list[ResourceRecord] = []
+        in_sub_zones: dict[tuple[str, str], str] = {}
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
             record_type = "A" if ip_address.version == 4 else "AAAA"
-            names = _names(ipam_record[field_name])
-            for fqdn in self._octodns_fqdns(names, ip_address, zone):
+            for name in _names(ipam_record[field_name]):
+                fqdn, unusable = _octodns_name(name)
+                # A configured sub-zone checks the names inside it, so the
+                # source warns about them there and not here.
+                sub_zone = _sub_zone(zone, fqdn)
+                if unusable is not None and sub_zone is None:
+                    self._skip_name(name, ip_address, zone, unusable)
+                    continue
                 if not self._fqdn_in_zone(fqdn, zone):
                     self.log.debug("Skip: FQDN=%s on zone %s", fqdn, zone.name)
+                    continue
+                if sub_zone:
+                    in_sub_zones.setdefault((fqdn, record_type), sub_zone)
                     continue
                 rr = ResourceRecord(fqdn, record_type, ip_address.compressed)
                 if not self._usable(rr, ip_address, zone, lenient):
@@ -394,37 +407,21 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                     "Created %s record %s for zone %s", record_type, rr, zone.name
                 )
                 records.append(rr)
+        self._skip_sub_zone_records(in_sub_zones)
         return records
 
     def _octodns_fqdns(
         self, names: list[str], ip_address: IPv4Address | IPv6Address, zone: Zone
     ) -> list[str]:
-        """The names as octoDNS spells zone and record names.
+        """The names as octoDNS spells them.
 
-        That is lower case, with each label that is not ASCII in IDNA form:
-        höst.example. becomes xn--hst-sna.example. A name with a label that has
-        no IDNA form, or with an empty label, is left out, with a warning.
+        A name that the source cannot use is left out, with a warning.
         """
         fqdns: list[str] = []
         for name in names:
-            try:
-                # Lower case for the whole name first, as octoDNS does.
-                # str.lower() turns a capital sigma at the end of a label into
-                # a small sigma when the next label starts with a letter, and
-                # into a final sigma in a label on its own. Then label by
-                # label, as octoDNS 1.13 and later do. octoDNS 1.10 to 1.12
-                # convert the whole name, and IDNA rejects the "_" in an ASCII
-                # label such as ex_ample.
-                labels = name.lower().split(".")
-                fqdn = ".".join(idna_encode(label) for label in labels)
-            except IdnaError as error:
-                self._skip_name(name, ip_address, zone, error)
-                continue
-            # octoDNS would make .example.com. the zone apex, and accepts .www
-            # as a record name. IDNA turns a full-width dot into ".", so the
-            # check comes after it.
-            if "" in fqdn.split(".")[:-1]:
-                self._skip_name(name, ip_address, zone, "empty label")
+            fqdn, unusable = _octodns_name(name)
+            if unusable is not None:
+                self._skip_name(name, ip_address, zone, unusable)
                 continue
             fqdns.append(fqdn)
         return fqdns
@@ -481,6 +478,15 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
             reason,
         )
 
+    def _skip_sub_zone_records(self, in_sub_zones: dict[tuple[str, str], str]) -> None:
+        for (owner, record_type), sub_zone in in_sub_zones.items():
+            self.log.warning(
+                "Skipping subzone record: %s %s, which zone %s holds",
+                owner,
+                record_type,
+                sub_zone,
+            )
+
     def _fqdn_in_zone(self, fqdn: str, zone: Zone) -> bool:
         if fqdn == zone.name:
             return True
@@ -493,3 +499,51 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
 def _names(field_value: str) -> list[str]:
     names = (name.strip() for name in field_value.split(","))
     return [name if name.endswith(".") else f"{name}." for name in names if name]
+
+
+def _octodns_name(name: str) -> tuple[str, IdnaError | str | None]:
+    """The name as octoDNS spells zone and record names, and why it is unusable.
+
+    That is lower case, with each label that is not ASCII in IDNA form:
+    höst.example. becomes xn--hst-sna.example. A label that has no IDNA form
+    stays as it is, so the labels after it still give the zone of the name.
+    Its IdnaError is the reason that the source cannot use the name, and so is
+    an empty label.
+    """
+    # Lower case for the whole name first, as octoDNS does. str.lower() turns
+    # a capital sigma at the end of a label into a small sigma when the next
+    # label starts with a letter, and into a final sigma in a label on its
+    # own. Then label by label, as octoDNS 1.13 and later do. octoDNS 1.10 to
+    # 1.12 convert the whole name, and IDNA rejects the "_" in an ASCII label
+    # such as ex_ample.
+    labels: list[str] = []
+    unusable: IdnaError | str | None = None
+    for label in name.lower().split("."):
+        try:
+            labels.append(idna_encode(label))
+        except IdnaError as error:
+            labels.append(label)
+            if unusable is None:
+                unusable = error
+    fqdn = ".".join(labels)
+    # octoDNS would make .example.com. the zone apex, and accepts .www as a
+    # record name. IDNA turns a full-width dot into ".", so the check comes
+    # after it.
+    if unusable is None and "" in fqdn.split(".")[:-1]:
+        unusable = "empty label"
+    return fqdn, unusable
+
+
+def _sub_zone(zone: Zone, owner: str) -> str | None:
+    """The configured sub-zone that holds the record name, by octoDNS's rule.
+
+    octoDNS raises SubzoneRecordException for such a record, and adds it to
+    the zone when it is lenient. A name outside the zone is in no sub-zone.
+    """
+    name = owner.removesuffix(f".{zone.name}")
+    if name == owner:
+        return None
+    for sub_zone in sorted(zone.sub_zones):
+        if name == sub_zone or name.endswith(f".{sub_zone}"):
+            return f"{sub_zone}.{zone.name}"
+    return None

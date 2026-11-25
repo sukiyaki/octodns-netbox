@@ -1,0 +1,145 @@
+{
+  "source": {
+    "url": "http://netbox.example.com"
+  },
+  "init": [],
+  "zones": {
+    "strict-subzone.example.": {
+      "sub_zones": [
+        "lab"
+      ],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__ic=strict-subzone.example&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 2,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 100,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/100/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/100/",
+                  "display": "192.0.20.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.20.1/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "www.strict-subzone.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 101,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/101/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/101/",
+                  "display": "192.0.20.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.20.2/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host.lab.strict-subzone.example, see wiki.lab.strict-subzone.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "lab.strict-subzone.example.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__ic=lab.strict-subzone.example&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 1,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 101,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/101/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/101/",
+                  "display": "192.0.20.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.20.2/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host.lab.strict-subzone.example, see wiki.lab.strict-subzone.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

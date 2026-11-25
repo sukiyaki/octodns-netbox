@@ -2,8 +2,8 @@
 
 Each case becomes one octoDNS config with a single NetboxSource. octoDNS treats
 a configured zone inside another configured zone as a sub-zone, so only the
-"subzones" case puts nested zones in the same config. run.py records each case
-as tests/fixtures/<case>.json for the unit tests.
+cases about sub-zones put nested zones in the same config. run.py records each
+case as tests/fixtures/<case>.json for the unit tests.
 """
 
 from dataclasses import dataclass, field, replace
@@ -148,6 +148,10 @@ def cases(vrf_ids: dict[str, int]) -> list[Case]:
             {"field_name": "dns_name"},
         ),
         Case("empty-label", ("leading-dot.example.", "19.0.192.in-addr.arpa.")),
+        Case(
+            "subzone-unusable",
+            ("strict-subzone.example.", "lab.strict-subzone.example."),
+        ),
     ]
 
 
