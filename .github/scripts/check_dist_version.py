@@ -6,6 +6,10 @@ hatch-vcs builds the tag's version in its normalized form, so the tag
 v0.6.0-rc1 builds 0.6.0rc1. The check compares packaging.version.Version
 objects, which compare normalized versions. It writes the version and whether
 it is a pre-release to $GITHUB_OUTPUT.
+
+hatch-vcs keeps the local version label of a tag, so the tag v0.6.0+review
+builds 0.6.0+review. PyPI rejects a local version when the pypi job uploads
+it, so the check stops such a tag before that job runs.
 """
 
 import os
@@ -17,6 +21,12 @@ from packaging.version import Version
 
 tag = os.environ["GITHUB_REF_NAME"]
 version = Version(tag)
+if version.local is not None:
+    sys.exit(
+        f"::error::Tag {tag} is version {version}, which has the local version "
+        f"label {version.local}. PyPI rejects local versions, so tag the "
+        f"version without the + part, such as v{version.public}."
+    )
 dist = Path("dist")
 wheels = [parse_wheel_filename(path.name)[1] for path in dist.glob("*.whl")]
 sdists = [parse_sdist_filename(path.name)[1] for path in dist.glob("*.tar.gz")]

@@ -195,7 +195,8 @@ PyPI does not accept the same version twice, so check the tag before you push it
    The `release` workflow builds the wheel and the sdist with the same steps as the `build` job in CI, which run `twine check`.
    It checks that their version is the version of the tag.
    It compares normalized versions, so the tag `v0.6.0-rc1` also builds and releases `0.6.0rc1`.
-   It uploads them to PyPI through Trusted Publishing, in the `pypi` environment.
+   It stops for a tag with a local version label, such as `v0.6.0+review`, because PyPI rejects local versions.
+   It uploads the wheel and the sdist to PyPI through Trusted Publishing, in the `pypi` environment.
    It then creates the GitHub release with generated notes and both files.
    A pre-release version, such as `0.6.0rc1` or `0.6.0.dev1`, becomes a pre-release on GitHub.
 3. Edit the GitHub release.
