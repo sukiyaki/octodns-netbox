@@ -80,7 +80,7 @@ import seed
 HERE = Path(__file__).resolve().parent
 FIXTURES_DIR = HERE.parent / "fixtures"
 # "latest" is not a v<NetBox>-<netbox-docker> tag, so Renovate leaves it alone.
-IMAGE_TAGS = {"4.0": "v4.0.11-2.9.1", "4.7": "v4.7.5-5.1.2", "latest": "latest"}
+IMAGE_TAGS = {"4.0": "v4.0.11-2.9.1", "4.7": "v4.7.6-5.1.2", "latest": "latest"}
 # The unit tests replay this release only. Other releases are checked by the
 # zones they dump.
 FIXTURES_NETBOX = "4.7"
