@@ -5,6 +5,13 @@
         "helpers:pinGitHubActionDigestsToSemver"
     ],
     "ignorePaths": [],
+    "vulnerabilityAlerts": {
+        "description": "A fix for a Dependabot alert opens at once, outside every schedule, and a person reviews it.",
+        "labels": [
+            "security"
+        ],
+        "automerge": false
+    },
     "lockFileMaintenance": {
         "enabled": true,
         "schedule": [

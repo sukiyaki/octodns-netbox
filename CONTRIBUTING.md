@@ -215,6 +215,9 @@ Renovate opens the update pull requests, as `renovate.json` sets.
   Each workflow pins every action to a commit and names its version in a comment, and Renovate updates both.
 - A runtime dependency update widens its range in `pyproject.toml` and never merges by itself.
   The wider range tells users that the package supports the new version, so a person reviews the changelog of the dependency and the results of CI.
+- For each Dependabot alert, Renovate opens a pull request that updates the package to the first fixed version.
+  The pull request opens at once, outside any schedule, with the `security` label, and it never merges by itself.
+  Dependabot itself opens no pull requests.
 - Each Monday, Renovate refreshes `uv.lock`.
 - The build backend comes in one pull request, after you approve it on the Dependency Dashboard issue.
   `build-constraint-dependencies` under `[tool.uv]` in `pyproject.toml` pins hatchling, hatch-vcs, and every package they need, because `uv build` installs them in an environment of its own.
