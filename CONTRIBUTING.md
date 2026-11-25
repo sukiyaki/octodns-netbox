@@ -267,6 +267,9 @@ Renovate opens the update pull requests, as `renovate.json` sets.
 - GitHub Actions come in one pull request.
   Minor and patch updates merge when CI passes.
   Each workflow pins every action to a commit and names its version in a comment, and Renovate updates both.
+- The PostgreSQL and Valkey images in `tests/live/compose.yaml` come in one pull request each.
+  Minor and patch updates merge when CI and the `live` workflow pass.
+  A major update never merges by itself.
 - A runtime dependency update widens its range in `pyproject.toml` and never merges by itself.
   The wider range tells users that the package supports the new version, so a person reviews the changelog of the dependency and the results of CI.
 - For each Dependabot alert, Renovate opens a pull request that updates the package to the first fixed version.
