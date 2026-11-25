@@ -16,20 +16,24 @@ class FakeCompose:
 
     def __init__(self, fail=(), containers=""):
         self.fail = fail
-        self.containers = containers
         self.commands = []
+        # NETBOX_IMAGE_TAG of each command.
+        self.image_tags = []
         # Command name to a function that runs before the command.
         self.before = {}
+        # Command name to what the command prints.
+        self.stdout = {"ps": containers}
 
     def __call__(self, command, **kwargs):
         # docker compose --project-name <name> --file <path> <command> ...
         name = command[command.index("--file") + 2]
         self.commands.append(name)
+        self.image_tags.append(kwargs["env"]["NETBOX_IMAGE_TAG"])
         if name in self.before:
             self.before[name]()
         if name in self.fail:
             raise subprocess.CalledProcessError(1, command)
-        stdout = self.containers if name == "ps" else ""
+        stdout = self.stdout.get(name, "")
         return subprocess.CompletedProcess(command, 0, stdout=stdout)
 
 
@@ -62,6 +66,32 @@ def test_each_run_gets_its_own_default_output_dir(tmp_path, monkeypatch, compose
     assert len(outputs) == 2
     assert all(path.name.startswith("netbox-4.7-token-v1-") for path in outputs)
     assert [result_of(path)["result"] for path in outputs] == ["error", "error"]
+
+
+def test_the_latest_row_starts_the_latest_image(tmp_path, compose):
+    argv = ["--netbox", "latest", "--token-version", "2"]
+    assert run.main([*argv, "--output-dir", str(tmp_path)]) == 1
+    assert set(compose.image_tags) == {"latest"}
+    assert result_of(tmp_path)["image_tag"] == "latest"
+
+
+def test_the_latest_row_cannot_record_the_fixtures():
+    with pytest.raises(SystemExit):
+        run.parse_args(["--netbox", "latest", "--record-fixtures"])
+
+
+@pytest.mark.parametrize(
+    ("netbox", "fixtures"), [("4.7", "differs"), ("latest", "not-checked")]
+)
+def test_only_the_fixtures_release_compares_the_recording(
+    tmp_path, monkeypatch, netbox, fixtures
+):
+    # A new release may add fields to its responses without breaking the source.
+    monkeypatch.setattr(run, "FIXTURES_DIR", tmp_path / "fixtures")
+    run.record.write({"case": {"field": 1}}, run.FIXTURES_DIR)
+    args = run.parse_args(["--netbox", netbox])
+    recording = {"case": {"field": 1, "new_field": 2}}
+    assert run.check_fixtures(args, tmp_path / "out", recording) == fixtures
 
 
 def test_refuses_the_output_dir_of_a_run_that_has_not_ended(tmp_path, compose):
@@ -131,6 +161,25 @@ def test_two_runs_that_start_together_cannot_share_an_output_dir(tmp_path, compo
     assert (tmp_path / "zones" / "first.yaml").exists()
     assert result_of(tmp_path)["result"] == "error"
     assert not (tmp_path / "run.lock").exists()
+
+
+def test_records_the_netbox_version_when_a_later_step_fails(
+    tmp_path, compose, monkeypatch
+):
+    # A new NetBox release starts, then breaks token provisioning. run.json
+    # must still say which release ran.
+    def broken_provisioning(*args, **kwargs):
+        raise RuntimeError("POST /api/users/tokens/provision/ -> 500")
+
+    compose.fail = ()
+    compose.stdout["exec"] = 'version: "9.9.9"\nedition: "Community"\n'
+    monkeypatch.setattr(run.seed, "provision_token", broken_provisioning)
+    assert main(tmp_path) == 1
+    assert "exec" in compose.commands
+    result = result_of(tmp_path)
+    assert result["netbox_version"] == "9.9.9"
+    assert result["result"] == "error"
+    assert "tokens/provision" in result["error"]
 
 
 def test_a_run_that_ended_leaves_the_output_dir_to_the_next_run(tmp_path, compose):
@@ -229,7 +278,7 @@ def test_empties_the_output_of_a_previous_run(tmp_path, compose):
 
 
 def test_refuses_a_project_that_already_has_containers(tmp_path, compose):
-    compose.containers = "0123456789ab\n"
+    compose.stdout["ps"] = "0123456789ab\n"
     assert main(tmp_path) == 1
     assert compose.commands == ["ps"]
     assert (

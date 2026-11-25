@@ -11,6 +11,10 @@ reaches the responses cannot leave stale fixtures behind. To rewrite them:
 
     uv run tests/live/run.py --netbox 4.7 --record-fixtures
 
+--netbox latest runs the floating "latest" image, the newest stable NetBox
+with the newest netbox-docker. It compares only the zones, and it prints the
+NetBox version that ran and writes it to run.json.
+
 It dumps the "description" case again with a misspelled key added, and fails
 unless the source warns about the key and the zones and requests stay the
 same. Then it adds --perf-ip-count addresses and times --perf-runs full dumps.
@@ -51,6 +55,7 @@ import json
 import logging
 import os
 import platform
+import re
 import secrets
 import shutil
 import statistics
@@ -73,8 +78,9 @@ import seed
 
 HERE = Path(__file__).resolve().parent
 FIXTURES_DIR = HERE.parent / "fixtures"
-IMAGE_TAGS = {"4.0": "v4.0.11-2.9.1", "4.7": "v4.7.5-5.1.2"}
-# The unit tests replay this release only. Older releases are checked by the
+# "latest" is not a v<NetBox>-<netbox-docker> tag, so Renovate leaves it alone.
+IMAGE_TAGS = {"4.0": "v4.0.11-2.9.1", "4.7": "v4.7.5-5.1.2", "latest": "latest"}
+# The unit tests replay this release only. Other releases are checked by the
 # zones they dump.
 FIXTURES_NETBOX = "4.7"
 PACKAGES = ("octodns-netbox", "octodns", "pynetbox", "pydantic", "requests")
@@ -150,6 +156,31 @@ class Stack:
         self._run("up", "--detach", "--wait", "--wait-timeout", "900")
         port = self._run("port", "netbox", "8080", stdout=subprocess.PIPE)
         return f"http://{port.stdout.strip()}"
+
+    def netbox_version(self) -> str:
+        """The NetBox version in the running container, read without a token.
+
+        The API answers /api/status/ only with a token, so the version comes
+        from the release.yaml that NetBox ships. NetBox 4.0 ships none, and
+        the VERSION line of its settings.py holds the version instead.
+        """
+        try:
+            release = self._cat(
+                "/opt/netbox/netbox/release.yaml", stderr=subprocess.DEVNULL
+            )
+        except subprocess.CalledProcessError as no_release:
+            settings = self._cat("/opt/netbox/netbox/netbox/settings.py")
+            version = re.search(r"^VERSION = '(.+)'$", settings, re.MULTILINE)
+            if version is None:
+                raise RuntimeError("settings.py has no VERSION line") from no_release
+            return version[1]
+        return str(yaml.safe_load(release)["version"])
+
+    def _cat(self, path: str, **kwargs: Any) -> str:
+        """The contents of `path` in the NetBox container."""
+        return self._run(
+            "exec", "-T", "netbox", "cat", path, stdout=subprocess.PIPE, **kwargs
+        ).stdout
 
     def save_logs(self, path: Path) -> None:
         with path.open("w") as fh:
@@ -440,9 +471,12 @@ def check_netbox(
     """Start NetBox, dump and compare every case. Returns the status and result."""
     with _timed(durations, "startup"):
         url = stack.up()
+    # Read the version first, so a run that a new NetBox release breaks in a
+    # later step still says which release ran.
+    run["netbox_version"] = stack.netbox_version()
+    print(f"NetBox {run['netbox_version']} is running.", flush=True)
     token = seed.provision_token(url, USERNAME, PASSWORD, args.token_version)
     netbox = seed.NetBox(url, seed.auth_header(token, args.token_version))
-    run["netbox_version"] = netbox.get("status/")["netbox-version"]
     with _timed(durations, "seed"):
         vrf_ids = seed.seed(netbox)
 
