@@ -137,6 +137,14 @@ The source reads only the IP addresses that have every tag in the list.
 An empty list reads IP addresses with or without tags.
 A single string, such as `populate_tags: dns` or `populate_tags: env/NETBOX_TAGS`, is not a list, and the source stops at startup with a pydantic `ValidationError` on `populate_tags`.
 
+Each slug must be the slug of a tag in NetBox, in the same case.
+For a slug that no tag has, NetBox answers `400 Bad Request`, and the zone stops with an error from pynetbox.
+NetBox 4.7 gives this error for `populate_tags: [no-such-tag]`:
+
+```text
+RequestError: The request failed with code 400 Bad Request: {'tag': ['Select a valid choice. no-such-tag is not one of the available choices.']}
+```
+
 ### `populate_vrf_id`
 
 The ID of a VRF.
@@ -160,6 +168,10 @@ The source stops at startup if no VRF or more than one VRF has the name.
 It also stops if the name is empty or holds only whitespace, with a pydantic `ValidationError` on `populate_vrf_name`.
 NetBox ignores such a name filter and returns every VRF, so the source would read the only VRF of a NetBox that has one.
 Use `populate_vrf_id` when several VRFs share a name.
+
+A VRF named `null` cannot be selected by name.
+NetBox reads the filter `name=null` as an empty name, so the source finds no VRF and stops with `Failed to retrieve VRF information by name 'null'`.
+Set `populate_vrf_id` to the ID of that VRF instead.
 
 Do not set both `populate_vrf_id` and `populate_vrf_name`.
 
@@ -219,6 +231,9 @@ A `ValidationError` from the source holds none of the values in the config.
 It names the key, so octoDNS prints neither the token nor the value that failed.
 
 ## Errors while reading a zone
+
+When NetBox refuses the query of a zone, the zone stops with pynetbox's `RequestError`.
+A slug in `populate_tags` that no tag has gives this error, as [`populate_tags`](#populate_tags) shows.
 
 The source raises `ValueError` when it cannot read a reverse zone name.
 It raises the error before it sends a request to NetBox.

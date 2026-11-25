@@ -1,6 +1,7 @@
 # Read one VRF or tagged IP addresses
 
 By default, the source reads the IP addresses in every VRF, with or without tags.
+It reads IP addresses of every status: active, reserved, deprecated, DHCP, and SLAAC.
 This guide limits the source to one VRF, to tagged IP addresses, or to both.
 
 The examples use these IP addresses:
@@ -87,7 +88,8 @@ For `populate_vrf_name: no-such-vrf`, the error is:
 ValueError: Failed to retrieve VRF information by name 'no-such-vrf'. Use a valid populate_vrf_id instead.
 ```
 
-Set `populate_vrf_id` instead when several VRFs share the name.
+Set `populate_vrf_id` instead when several VRFs share the name, or when the VRF is named `null`.
+NetBox reads the filter `name=null` as an empty name, so the source finds no VRF named `null`.
 
 ## Read only IP addresses without a VRF
 
@@ -126,6 +128,8 @@ The zone gets only the record of `192.0.3.1`:
 
 Set `populate_tags` to a list of tag slugs.
 NetBox shows the slug on the page of each tag.
+Write each slug as NetBox shows it.
+For a slug that no tag has, NetBox answers `400 Bad Request`, and the zone stops.
 
 ```yaml
 providers:
@@ -168,3 +172,9 @@ With `populate_tags: [dns, external]`, the zone gets only `tagged-dns-external`.
 
 Set a VRF key and `populate_tags` together.
 The source then reads only the IP addresses in that VRF that have every tag.
+
+## Leave out IP addresses by status
+
+The source has no setting for the status of an IP address, and sends no status filter to NetBox.
+A reserved or deprecated IP address with a name gets its records, as an active one does.
+To leave such IP addresses out, give a tag to the IP addresses that need records and set `populate_tags`, or remove the name from the others.

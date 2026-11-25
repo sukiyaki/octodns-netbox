@@ -88,6 +88,9 @@ zones:
 
    - The name `example.com` gives the record at the zone apex, `''`.
    - IP addresses with the same name share one record, with one value for each address.
+     NetBox keeps the inside and the outside address of a NAT as two IP addresses.
+     When both have the same name, the A record gets both addresses.
+     To publish one of them, remove the name from the other.
    - `description-host3.subdomain1.example.com.jp` is not in the zone, so it gets no record.
 
 ## Read the names from `dns_name`

@@ -121,6 +121,9 @@ It assumes that NetBox holds these IP addresses:
      value: host2.example.test.
    ```
 
+   On the next run, the plan shows only the records that changed in NetBox.
+   With octoDNS 1.10, a `YamlProvider` target reads no records from its directory, so each run plans every record as new.
+   octoDNS 1.11 and later read the files.
 6. Replace the `yaml` target with the octoDNS provider of your DNS service.
 
 ## Supported versions
