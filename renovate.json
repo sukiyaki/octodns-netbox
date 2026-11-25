@@ -100,6 +100,17 @@
             "automerge": true
         },
         {
+            "description": "The PostgreSQL and Valkey images of the NetBox stack in tests/live/compose.yaml. The live tests run on each update, and a major update waits for a person.",
+            "matchManagers": [
+                "docker-compose"
+            ],
+            "matchUpdateTypes": [
+                "minor",
+                "patch"
+            ],
+            "automerge": true
+        },
+        {
             "description": "uv.lock records the build backend pins, and Renovate cannot run uv lock for a custom manager. Each update waits for approval on the Dependency Dashboard, and its pull request needs uv lock before CI passes.",
             "matchManagers": [
                 "custom.regex"
