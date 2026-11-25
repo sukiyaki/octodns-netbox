@@ -147,7 +147,8 @@ The TTL, in seconds, of every record that the source creates.
 
 ### `ssl_verify`
 
-With `false`, the source does not verify the TLS certificate of NetBox.
+With `false`, the source does not verify the TLS certificate of NetBox, even when the environment variable `REQUESTS_CA_BUNDLE` or `CURL_CA_BUNDLE` names a CA bundle.
+With `true`, the source verifies the certificate against that CA bundle when one of the variables is set, and against the CA bundle of certifi otherwise.
 
 ## Unknown keys
 

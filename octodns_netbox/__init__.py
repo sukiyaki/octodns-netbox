@@ -67,6 +67,23 @@ else:  # pragma: no-cover-without-rrset
 VrfFilter = int | Literal["global"] | None
 
 
+class _Session(requests.Session):
+    """A session whose verify setting is not replaced by the environment.
+
+    For a request without a verify argument, which is every request that
+    pynetbox sends, requests takes the CA bundle in REQUESTS_CA_BUNDLE or
+    CURL_CA_BUNDLE over Session.verify. ssl_verify: false would then still
+    verify the certificate against that bundle.
+    """
+
+    def merge_environment_settings(
+        self, url: Any, proxies: Any, stream: Any, verify: Any, cert: Any
+    ) -> dict[str, Any]:
+        if verify is None:
+            verify = self.verify
+        return super().merge_environment_settings(url, proxies, stream, verify, cert)
+
+
 class ResourceRecord(NamedTuple):
     """One value of a record. The source groups them by owner and type."""
 
@@ -159,7 +176,7 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
         )
 
         self._nb_client = pynetbox.api(url=self.config.url, token=self.config.token)
-        session = requests.Session()
+        session = _Session()
         session.verify = self.config.ssl_verify
         self._nb_client.http_session = session
 

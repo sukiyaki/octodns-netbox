@@ -170,22 +170,50 @@ def test_init_error_contains_no_value_of_a_setting(settings):
         assert [piece for piece in pieces if piece in text] == []
 
 
+BUNDLE = "/etc/ssl/netbox.pem"
+PROXY = "http://proxy.example:3128"
+
+
 @pytest.mark.parametrize(
-    ("settings", "verify"), [({}, True), ({"ssl_verify": False}, False)]
+    ("bundle_variable", "settings", "verify"),
+    [
+        (None, {}, True),
+        (None, {"ssl_verify": False}, False),
+        # A CA bundle in the environment replaces True, but never False.
+        ("REQUESTS_CA_BUNDLE", {}, BUNDLE),
+        ("REQUESTS_CA_BUNDLE", {"ssl_verify": False}, False),
+        ("CURL_CA_BUNDLE", {}, BUNDLE),
+        ("CURL_CA_BUNDLE", {"ssl_verify": False}, False),
+    ],
 )
 def test_ssl_verify_sets_whether_each_request_verifies_tls(
-    monkeypatch, settings, verify
+    monkeypatch, bundle_variable, settings, verify
 ):
-    # requests sends a CA bundle named in these variables instead of True.
-    monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
-    monkeypatch.delenv("CURL_CA_BUNDLE", raising=False)
+    for variable in (
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+        monkeypatch.delenv(variable.upper(), raising=False)
+    if bundle_variable is not None:
+        monkeypatch.setenv(bundle_variable, BUNDLE)
+    # A proxy from the environment applies whatever ssl_verify says.
+    monkeypatch.setenv("HTTP_PROXY", PROXY)
     case = load_case("vrf-name")
     zone_name = "3.0.192.in-addr.arpa."
     exchanges = case["init"] + case["zones"][zone_name]["exchanges"]
     with replaying(exchanges) as mock:
         source = NetboxSource("netbox", token="t", **case["source"], **settings)
         source.populate(Zone(zone_name, []))
-    assert [request.verify for request in mock.request_history] == [verify] * 2
+    sent = [
+        (request.verify, request.proxies.get("http"))
+        for request in mock.request_history
+    ]
+    assert sent == [(verify, PROXY)] * 2
 
 
 @pytest.mark.parametrize("suffix", ["/api", "/api/"])
