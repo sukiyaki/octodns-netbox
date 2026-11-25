@@ -209,9 +209,14 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
         else:
             rrs = self._forward_records(zone)
 
+        # Two NetBox IP addresses can give a record the same value, such as one
+        # address and name in two VRFs. octoDNS keeps a value it gets twice,
+        # and a provider holds it once, so each sync would plan an update.
         rdatas: dict[tuple[str, str], list[str]] = defaultdict(list)
         for rr in rrs:
-            rdatas[(rr.owner, rr.type)].append(rr.rdata)
+            values = rdatas[(rr.owner, rr.type)]
+            if rr.rdata not in values:
+                values.append(rr.rdata)
         for record in _octodns_records(zone, rdatas, self.config.ttl, lenient):
             try:
                 zone.add_record(record, lenient=lenient)

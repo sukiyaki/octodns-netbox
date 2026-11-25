@@ -276,6 +276,14 @@ IPS = (
     Ip("192.0.15.2/24", "deep.sub.env.example"),
     Ip("2001:db8:15::1/64", "host.env.example"),
     Ip("2001:db8:15::2/64", "deep.sub.env.example"),
+    # Zone vrf-dup.example.: one IPv4 and one IPv6 address with one name in
+    # the Global VRF and in VRF anycast, and a second IPv4 address with that
+    # name. The A record gets each address once, and the AAAA record one.
+    Ip("192.0.16.1/24", "host.vrf-dup.example"),
+    Ip("192.0.16.1/24", "host.vrf-dup.example", vrf=ANYCAST_VRF),
+    Ip("192.0.16.2/24", "host.vrf-dup.example", vrf=ANYCAST_VRF),
+    Ip("2001:db8:16::1/64", "host.vrf-dup.example"),
+    Ip("2001:db8:16::1/64", "host.vrf-dup.example", vrf=ANYCAST_VRF),
 )
 
 

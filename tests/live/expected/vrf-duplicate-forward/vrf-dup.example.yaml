@@ -1,0 +1,10 @@
+---
+host:
+- ttl: 60
+  type: A
+  values:
+  - 192.0.16.1
+  - 192.0.16.2
+- ttl: 60
+  type: AAAA
+  value: 2001:db8:16::1

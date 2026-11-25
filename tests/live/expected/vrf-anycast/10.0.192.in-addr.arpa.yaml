@@ -4,8 +4,6 @@
   type: PTR
   values:
   - anycast-10-1-a.example.
-  - anycast-10-1-a.example.
-  - anycast-10-1-b.example.
   - anycast-10-1-b.example.
 '2':
   ttl: 60

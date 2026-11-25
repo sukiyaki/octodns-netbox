@@ -149,15 +149,17 @@ With `multivalue_ptr: true`, it uses every name.
 
 The source groups the values by record name and type.
 Two IP addresses with the same name give one A record with two values.
+When two IP addresses give a record the same value, such as one address with one name in two VRFs, the record gets that value once.
+octoDNS would otherwise keep the value twice, and plan an update on every sync against a provider that holds it once.
 
 The same grouping applies to PTR records.
 NetBox can hold the same address more than once, for example once in each VRF.
-Without a VRF filter, the source reads each of them, and the PTR record of the address gets one value from each.
+Without a VRF filter, the source reads each of them, and the PTR record of the address gets the value of each.
 `multivalue_ptr: false` limits the names of each IP address, not the values of each PTR record.
 
 The source does not pick one of the values.
-`multivalue_ptr: false` meant "the first name of each IP address" in 0.5.0 too, and the project keeps the zones of a 0.5.0 config unchanged.
-Picking one value would change them.
+`multivalue_ptr: false` meant "the first name of each IP address" in 0.5.0 too, and the project keeps every distinct value that a 0.5.0 config gives.
+Picking one value would drop the others.
 The source logs a warning instead, and the warning names the VRF keys that read one VRF.
 It logs the warning only when each VRF gives the PTR record one name, and the VRFs give different names.
 Any one VRF then gives the record one value.
@@ -167,7 +169,7 @@ NetBox holds an address twice in one VRF when the VRF does not enforce uniquenes
 It also holds the address twice in a VRF that enforces uniqueness, when each IP address with that address has a role that NetBox exempts.
 `IPAddress.clean()` in `netbox/ipam/models/ip.py` exempts the roles anycast, VIP, VRRP, HSRP, GLBP, and CARP, in NetBox 4.0 and 4.7.
 Two anycast IP addresses can therefore share an address in the Global VRF, which enforces uniqueness by default.
-The PTR record then gets a value from each row, and the source logs no warning.
+The PTR record then gets the value of each row, and the source logs no warning.
 No setting of the source picks one of those rows, so the warning could only ask you to change data that NetBox was set up to allow.
 
 The source also logs no warning when one VRF gives the PTR record two names and other VRFs hold the address too.
