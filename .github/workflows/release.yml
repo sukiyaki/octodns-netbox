@@ -61,9 +61,25 @@ jobs:
       with:
         name: dist
         path: dist/
-    - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
-      with:
-        files: dist/*
-        fail_on_unmatched_files: true
-        generate_release_notes: true
-        prerelease: ${{ needs.build.outputs.prerelease == 'true' }}
+    - name: Create the GitHub release of the tag
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        TAG: ${{ github.ref_name }}
+        PRERELEASE: ${{ needs.build.outputs.prerelease }}
+      # failglob stops the step if dist/ has no wheel or no sdist. When a rerun
+      # finds the release that an earlier attempt created, it replaces the
+      # files of that release instead of failing.
+      run: |
+        set -euo pipefail
+        shopt -s failglob
+        assets=(dist/*.whl dist/*.tar.gz)
+        if gh release view "$TAG" > /dev/null 2>&1; then
+          gh release upload "$TAG" "${assets[@]}" --clobber
+        else
+          gh release create "$TAG" "${assets[@]}" \
+            --verify-tag \
+            --title "$TAG" \
+            --generate-notes \
+            --prerelease="$PRERELEASE"
+        fi
