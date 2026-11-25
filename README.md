@@ -17,7 +17,8 @@ The source cannot be a target, and it never writes to NetBox.
   Each IP address holds its names in the `description` field as a comma-separated list, or one name in the `dns_name` field.
 - It creates an A record for each IPv4 address and an AAAA record for each IPv6 address whose name is in a forward zone.
 - It creates a PTR record for each IP address in a reverse zone.
-  It handles IPv4 zones on octet boundaries, classless IPv4 zones in RFC 2317 and RFC 4183 form, and IPv6 nibble zones.
+  It handles IPv4 zones on octet boundaries, IPv6 nibble zones, and classless IPv4 zones for prefix lengths 25 to 31.
+  A classless zone name starts with the last octet of the network and the prefix length, such as `0/26` (the form in RFC 2317) or `0-26` (the form in RFC 4183).
 - It can read only the IP addresses in one VRF, or only the IP addresses with given tags.
 - It skips a name that octoDNS rejects, such as free text in a description, and logs a warning.
   The other records of the zone are still created.
