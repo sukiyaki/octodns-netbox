@@ -1,150 +1,167 @@
-#  A [NetBox](https://github.com/digitalocean/netbox) source for [octoDNS](https://github.com/github/octodns/)
+# octodns-netbox
 
-[![PyPI](https://img.shields.io/pypi/v/octodns-netbox)](https://pypi.python.org/pypi/octodns-netbox)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/octodns-netbox)](https://pypi.python.org/pypi/octodns-netbox)
-[![PyPI - License](https://img.shields.io/pypi/l/octodns-netbox)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/octodns-netbox)](https://pypi.org/project/octodns-netbox/)
+[![Python versions](https://img.shields.io/pypi/pyversions/octodns-netbox)](https://pypi.org/project/octodns-netbox/)
+[![License](https://img.shields.io/pypi/l/octodns-netbox)](https://github.com/sukiyaki/octodns-netbox/blob/main/LICENSE)
 
-This project provides a NetBox source for OctoDNS. It retrieves IP address information from NetBox so that OctoDNS creates corresponding A/AAAA and PTR records.
+octodns-netbox is a source for [octoDNS](https://github.com/octodns/octodns) that reads IP addresses from [NetBox](https://github.com/netbox-community/netbox).
+It creates A and AAAA records from the names you store on each IP address, and PTR records for your reverse zones.
 
-**Note:** This is just a **source** for OctoDNS, not a **provider**. It only serve to populate records into a zone, cannot be synced to.
+It is a source, not a provider.
+octoDNS reads records from it and writes them to the DNS providers you configure as targets.
+The source cannot be a target, and it never writes to NetBox.
 
-## Installation
+## What it does
 
-```
+- It reads the IP addresses in NetBox IPAM.
+  Each IP address holds its names in the `description` field as a comma-separated list, or one name in the `dns_name` field.
+- It creates an A record for each IPv4 address and an AAAA record for each IPv6 address whose name is in a forward zone.
+- It creates a PTR record for each IP address in a reverse zone.
+  It handles IPv4 zones on octet boundaries, IPv6 nibble zones, and classless IPv4 zones for prefix lengths 25 to 31.
+  A classless zone name starts with the last octet of the network and the prefix length, such as `0/26` (the form in RFC 2317) or `0-26` (the form in RFC 4183).
+- It can read only the IP addresses in one VRF, or only the IP addresses with given tags.
+- It skips a name that octoDNS rejects, such as free text in a description, and logs a warning.
+  The other records of the zone are still created.
+
+It creates no other record types.
+It reads nothing from NetBox except IP addresses and, when you name a VRF, that VRF.
+
+## Install
+
+```sh
 pip install octodns-netbox
 ```
 
-## Getting started
+The package installs octoDNS as a dependency.
+Install the octoDNS provider for your DNS service as well.
 
-You must configure the `url` and `token` parameters in your YAML file to work with the NetBox API. You can also specify the TTL (Time to Live) for the generated records, but this parameter is optional, and the default value is 60.
+## Quick start
 
-```yaml
-providers:
-  netbox:
-    class: octodns_netbox.NetboxSource
-    url: https://ipam.example.com
-    token: env/NETBOX_TOKEN
-    ttl: 60
-```
+This example creates the records for zone `example.test.` and its reverse zone `100.51.198.in-addr.arpa.`.
+It assumes that NetBox holds these IP addresses:
 
-### A records / AAAA records
+| IP address | Description |
+| --- | --- |
+| `198.51.100.1/24` | `Host1.Example.TEST` |
+| `198.51.100.2/24` | `Host2.example.test` |
 
-To create A/AAAA records for octoDNS, you need to manage the mapping between IP addresses and fully qualified domain names (FQDNs) in NetBox. The `description` field is used for this purpose, and it should contain a comma-separated list of hostnames (FQDNs).
+1. In NetBox, create an API token.
+   The source sends only `GET` requests, so a token without write access is enough.
+2. Put the token in the environment variable `NETBOX_TOKEN`.
+   Replace `<token>` with the whole token.
+   A v2 token from NetBox 4.5 or later starts with `nbt_`.
 
-Starting with [Netbox v2.6.0](https://github.com/netbox-community/netbox/issues/166), Netbox now has a `dns_name` field in IP address records. But we **do not** use this field by default because this `dns_name` field can only store **single** FQDN. To use a `dns_name` field, set `field_name: dns_name` in [the configuration](#examples).
+   ```sh
+   export NETBOX_TOKEN='<token>'
+   ```
 
-### PTR records
+3. Save this octoDNS config as `config.yaml`.
+   Replace `https://netbox.example.com` with the URL of your NetBox.
 
-`octodns-netbox` also supports PTR records. By default, only the first FQDN in the field is used to generate the PTR record, but you can enable multiple PTR records for a single IP by setting the `multivalue_ptr` parameter to `true` in [the configuration](#examples).
+   ```yaml
+   providers:
+     netbox:
+       class: octodns_netbox.NetboxSource
+       url: https://netbox.example.com
+       token: env/NETBOX_TOKEN
+     yaml:
+       class: octodns.provider.yaml.YamlProvider
+       directory: ./zones
 
-#### 🔍 Example (`multivalue_ptr: false` - default)
-- IP Address: `192.0.2.1/24`
-  - Description: `en0.host1.example.com,host1.example.com`
-- DNS Zone: `2.0.192.in-addr.arpa.`
-  - `1. PTR en0.host1.example.com.`
+   zones:
+     example.test.:
+       sources:
+         - netbox
+       targets:
+         - yaml
+     100.51.198.in-addr.arpa.:
+       sources:
+         - netbox
+       targets:
+         - yaml
+   ```
 
-#### 🔍 Example (`multivalue_ptr: true`)
-- IP Address: `192.0.2.1/24`
-  - Description: `en0.host1.example.com,host1.example.com`
-- DNS Zone: `2.0.192.in-addr.arpa.`
-  - `1. PTR en0.host1.example.com.`
-  - `1. PTR host1.example.com.`
+4. See the changes that octoDNS plans:
 
-#### Classless subnet delegation (IPv4 /31 to /25)
+   ```sh
+   octodns-sync --config-file config.yaml
+   ```
 
-If you are using classless subnets in Netbox, you can automatically expand records for the following format zones:
+   The plan creates two records in each zone.
+5. Write the zones:
 
-- `<subnet>-<subnet mask bit count>.2.0.192.in-addr.arpa` ([RFC 4183](https://www.rfc-editor.org/rfc/rfc4183.html) style)
-- `<subnet>/<subnet mask bit count>.2.0.192.in-addr.arpa` ([RFC 2317](https://www.ietf.org/rfc/rfc2317.html) style)
+   ```sh
+   octodns-sync --config-file config.yaml --doit
+   ```
 
-## Examples
+   octoDNS writes one file per zone to `./zones`.
+   The source lower-cases every name, so `Host1.Example.TEST` becomes `host1`:
 
-Here is an example configuration for octodns-netbox:
+   ```yaml
+   # example.test.yaml
+   host1:
+     ttl: 60
+     type: A
+     value: 198.51.100.1
+   host2:
+     ttl: 60
+     type: A
+     value: 198.51.100.2
+   ```
 
-```yaml
-providers:
-  netbox:
-    class: octodns_netbox.NetboxSource
+   ```yaml
+   # 100.51.198.in-addr.arpa.yaml
+   '1':
+     ttl: 60
+     type: PTR
+     value: host1.example.test.
+   '2':
+     ttl: 60
+     type: PTR
+     value: host2.example.test.
+   ```
 
-    # Your Netbox URL
-    url: https://ipam.example.com
+   On the next run, the plan shows only the records that changed in NetBox.
+   With octoDNS 1.10, a `YamlProvider` target reads no records from its directory, so each run plans every record as new.
+   octoDNS 1.11 and later read the files.
+6. Replace the `yaml` target with the octoDNS provider of your DNS service.
 
-    # Your Netbox Access Token (read-only)
-    # This token should have read-only access to Netbox.
-    token: env/NETBOX_TOKEN
+## Supported versions
 
-    # The TTL of the generated records (Optional, default: 60)
-    # Time to Live (TTL) specifies the time interval that a DNS record is stored in cache.
-    # The default value of 60 is commonly used for dynamic DNS records.
-    ttl: 60
+| Component | Supported | Tested in CI |
+| --- | --- | --- |
+| Python | 3.11 to 3.15 | 3.11, 3.12, 3.13, 3.14, and 3.15 |
+| octoDNS | 1.10 or later, before 2.0 | 1.10.0 and the newest release |
+| pynetbox | 7.4.1 or later, before 8.0 | 7.4.1 and the newest release |
+| NetBox | 4.0 to 4.7 | 4.0 with a v1 token, 4.7 with v1 and v2 tokens, and every week the newest release with a v2 token |
 
-    # Advanced Parameters:
-    # The following parameters are optional and can be ignored for most use cases.
+The NetBox tests run octoDNS against a real NetBox in Docker.
+Each pull request tests the pinned NetBox releases, each with the locked and the lowest direct dependency versions.
+Every week, CI also tests the `latest` image of netbox-docker, and it tests the lowest dependency versions again, because those inputs can change without a commit.
+A new NetBox release can fail the weekly run before this table lists that release.
+NetBox 4.5 and later v2 API tokens work with every supported pynetbox release, 7.4.1 included.
 
-    # Generate records including subdomains (Optional, default: `true`)
-    # If `false`, only records that belong directly to the zone (domain) will be generated.
-    # This can be useful to reduce the number of DNS queries and avoid `SubzoneRecordException` errors.
-    populate_subdomains: true
+## Documentation
 
-    # FQDN field name (Optional, default: `description`)
-    # The `dns_name` field on Netbox is provided to hold only a single name,
-    # but typically one IP address will correspond to multiple DNS records (FQDNs).
-    # The `description` does not have any limitations so by default
-    # we use the `description` field to store multiple FQDNs, separated by commas.
-    # Other tested values are `dns_name`.
-    field_name: description
+- [Configuration reference](https://github.com/sukiyaki/octodns-netbox/blob/main/docs/configuration.md) lists every setting, its type, and its default.
+- [Create A and AAAA records](https://github.com/sukiyaki/octodns-netbox/blob/main/docs/forward-zones.md) for a forward zone.
+- [Create PTR records](https://github.com/sukiyaki/octodns-netbox/blob/main/docs/reverse-zones.md) for IPv4, classless, and IPv6 reverse zones.
+- [Read one VRF or tagged IP addresses](https://github.com/sukiyaki/octodns-netbox/blob/main/docs/filter-by-vrf-and-tag.md) only.
+- [How the source maps NetBox to records](https://github.com/sukiyaki/octodns-netbox/blob/main/docs/how-it-works.md) explains the queries it sends and the names it builds.
 
-    # Tag Name (Optional)
-    # By default, all records are retrieved from Netbox, but it can be restricted
-    # to only IP addresses assigned a specific tag.
-    # Multiple values can be passed, resulting in a logical AND operation.
-    populate_tags:
-      - tag_name
+## Changes
 
-    # VRF ID (Optional)
-    # By default, all records are retrieved from Netbox, but it can be restricted
-    # to only IP addresses assigned a specific VRF ID.
-    # If `0`, it explicitly points to the global VRF.
-    populate_vrf_id: 1
-
-    # VRF Name (Optional)
-    # VRF can also be specified by name.
-    # If there are multiple VRFs with the same name, it would be better to use `populate_vrf_id`.
-    # If `Global`, it explicitly points to the global VRF.
-    populate_vrf_name: mgmt
-
-    # Multi-value PTR records support (Optional, default: `false`)
-    # If `true`, multiple-valued PTR records will be generated.
-    # If `false`, the first FQDN value in the field will be used.
-    multivalue_ptr: true
-
-  route53:
-    class: octodns_route53.Route53Provider
-    access_key_id: env/AWS_ACCESS_KEY_ID
-    secret_access_key: env/AWS_SECRET_ACCESS_KEY
-
-zones:
-  example.com.:
-    sources:
-      - netbox  # will add A/AAAA records
-    targets:
-      - route53
-
-  0/26.2.0.192.in-addr.arpa.:
-    sources:
-      - netbox  # will add PTR records (corresponding to A records)
-    targets:
-      - route53
-
-  0.8.b.d.0.1.0.0.2.ip6.arpa:
-    sources:
-      - netbox  # will add PTR records (corresponding to AAAA records)
-    targets:
-      - route53
-```
+[GitHub Releases](https://github.com/sukiyaki/octodns-netbox/releases) lists the changes in each version and the steps to upgrade.
 
 ## Contributing
-See [the contributing guide](CONTRIBUTING.md) for detailed instructions on how to get started with our project.
+
+[CONTRIBUTING.md](https://github.com/sukiyaki/octodns-netbox/blob/main/CONTRIBUTING.md) tells you how to set up the project, run the tests, and release a version.
+
+## Security
+
+To report a vulnerability, follow [SECURITY.md](https://github.com/sukiyaki/octodns-netbox/blob/main/SECURITY.md).
+Do not open a public issue for it.
 
 ## License
-[MIT](https://choosealicense.com/licenses/mit/)
+
+[MIT](https://github.com/sukiyaki/octodns-netbox/blob/main/LICENSE)

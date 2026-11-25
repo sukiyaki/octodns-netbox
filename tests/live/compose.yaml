@@ -1,0 +1,50 @@
+# NetBox for the live tests. tests/live/run.py starts and removes this stack,
+# and sets NETBOX_IMAGE_TAG to pick the NetBox release.
+services:
+  netbox:
+    image: docker.io/netboxcommunity/netbox:${NETBOX_IMAGE_TAG:?set NETBOX_IMAGE_TAG}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    environment:
+      # Required for v2 API tokens (NetBox 4.5 and later). Throwaway value.
+      API_TOKEN_PEPPER_1: live-test-pepper-not-secret-0123456789abcdefghijklmnop
+      DB_HOST: postgres
+      DB_NAME: netbox
+      DB_PASSWORD: netbox
+      DB_USER: netbox
+      REDIS_HOST: valkey
+      SECRET_KEY: live-test-secret-key-not-secret-0123456789abcdefghijklmnop
+      SKIP_SUPERUSER: 'false'
+      SUPERUSER_EMAIL: admin@example.com
+      SUPERUSER_NAME: admin
+      SUPERUSER_PASSWORD: admin-password
+    healthcheck:
+      test: curl -fsS -o /dev/null http://localhost:8080/login/
+      start_period: 10m
+      start_interval: 2s
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    ports:
+    - 127.0.0.1::8080
+  postgres:
+    image: docker.io/library/postgres:18.7-alpine
+    environment:
+      POSTGRES_DB: netbox
+      POSTGRES_PASSWORD: netbox
+      POSTGRES_USER: netbox
+    healthcheck:
+      test: pg_isready -q -U netbox -d netbox
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  valkey:
+    image: docker.io/valkey/valkey:9.1.4-alpine
+    healthcheck:
+      test: valkey-cli ping
+      interval: 2s
+      timeout: 5s
+      retries: 30

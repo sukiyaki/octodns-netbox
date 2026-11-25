@@ -1,0 +1,67 @@
+{
+  "source": {
+    "url": "http://netbox.example.com",
+    "populate_vrf_name": "shared"
+  },
+  "init": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "http://netbox.example.com/api/ipam/vrfs/?name=shared&limit=0"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "count": 2,
+          "next": null,
+          "previous": null,
+          "results": [
+            {
+              "id": 4,
+              "url": "http://netbox.example.com/api/ipam/vrfs/4/",
+              "display_url": "http://netbox.example.com/ipam/vrfs/4/",
+              "display": "shared",
+              "name": "shared",
+              "rd": null,
+              "tenant": null,
+              "enforce_unique": true,
+              "description": "",
+              "owner": null,
+              "comments": "",
+              "import_targets": [],
+              "export_targets": [],
+              "tags": [],
+              "custom_fields": {},
+              "created": "2000-01-01T00:00:00.000000Z",
+              "last_updated": "2000-01-01T00:00:00.000000Z",
+              "ipaddress_count": 0,
+              "prefix_count": 0
+            },
+            {
+              "id": 5,
+              "url": "http://netbox.example.com/api/ipam/vrfs/5/",
+              "display_url": "http://netbox.example.com/ipam/vrfs/5/",
+              "display": "shared",
+              "name": "shared",
+              "rd": null,
+              "tenant": null,
+              "enforce_unique": true,
+              "description": "",
+              "owner": null,
+              "comments": "",
+              "import_targets": [],
+              "export_targets": [],
+              "tags": [],
+              "custom_fields": {},
+              "created": "2000-01-01T00:00:00.000000Z",
+              "last_updated": "2000-01-01T00:00:00.000000Z",
+              "ipaddress_count": 0,
+              "prefix_count": 0
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "zones": {}
+}

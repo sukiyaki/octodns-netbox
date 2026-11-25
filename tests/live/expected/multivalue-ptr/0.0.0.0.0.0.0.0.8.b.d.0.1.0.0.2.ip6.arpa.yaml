@@ -1,0 +1,45 @@
+---
+1.0.0.0.0.0.0.1.0.0.0.0.0.0.0.0:
+  ttl: 60
+  type: PTR
+  value: description-2001-0db8-1000-1.example.com.
+1.0.0.0.1.0.0.0.0.0.0.0.0.0.0.0:
+  ttl: 60
+  type: PTR
+  value: description-host1.example.com.
+2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0:
+  ttl: 60
+  type: PTR
+  value: description-2001-0db8-2.example.com.
+2.0.0.0.1.0.0.0.0.0.0.0.0.0.0.0:
+  ttl: 60
+  type: PTR
+  values:
+  - description-host2.subdomain1.example.com.
+  - description-host2.subdomain2.example.com.
+3.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0:
+  ttl: 60
+  type: PTR
+  value: description-2001-0db8-3.example.com.
+3.0.0.0.1.0.0.0.0.0.0.0.0.0.0.0:
+  ttl: 60
+  type: PTR
+  values:
+  - description-host3.subdomain1.example.com.jp.
+  - description-host3.subdomain2.example.com.
+4.0.0.0.1.0.0.0.0.0.0.0.0.0.0.0:
+  ttl: 60
+  type: PTR
+  value: description-subdomain1.example.com.
+5.0.0.0.1.0.0.0.0.0.0.0.0.0.0.0:
+  ttl: 60
+  type: PTR
+  value: description-roundrobin.example.com.
+6.0.0.0.1.0.0.0.0.0.0.0.0.0.0.0:
+  ttl: 60
+  type: PTR
+  value: description-roundrobin.example.com.
+7.0.0.0.1.0.0.0.0.0.0.0.0.0.0.0:
+  ttl: 60
+  type: PTR
+  value: example.com.

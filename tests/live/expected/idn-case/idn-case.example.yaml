@@ -1,0 +1,51 @@
+---
+di̇yarbakir:
+  ttl: 60
+  type: A
+  value: 192.0.11.13
+i̇stanbul:
+  ttl: 60
+  type: A
+  value: 192.0.11.11
+straße:
+  ttl: 60
+  type: A
+  values:
+  - 192.0.11.10
+  - 192.0.11.9
+ıspanak:
+  ttl: 60
+  type: A
+  value: 192.0.11.12
+α.ς.1:
+  ttl: 60
+  type: A
+  value: 192.0.11.3
+ας:
+  ttl: 60
+  type: A
+  value: 192.0.11.5
+ας.1:
+  ttl: 60
+  type: A
+  value: 192.0.11.4
+ασ:
+  ttl: 60
+  type: A
+  value: 192.0.11.2
+ασ.café:
+  ttl: 60
+  type: A
+  value: 192.0.11.6
+ασ.α:
+  ttl: 60
+  type: A
+  value: 192.0.11.1
+τεστ-テスト:
+  ttl: 60
+  type: A
+  value: 192.0.11.8
+東京.ασ:
+  ttl: 60
+  type: A
+  value: 192.0.11.7

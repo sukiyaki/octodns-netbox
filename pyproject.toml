@@ -1,6 +1,6 @@
 [build-system]
-build-backend = "poetry_dynamic_versioning.backend"
-requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+build-backend = "hatchling.build"
+requires = ["hatch-vcs>=0.5.0", "hatchling>=1.27.0"]
 
 [project]
 authors = [
@@ -12,42 +12,139 @@ classifiers = [
   'License :: OSI Approved :: MIT License',
   'Natural Language :: English',
   'Programming Language :: Python :: 3',
-  'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
   'Programming Language :: Python :: 3.12',
   'Programming Language :: Python :: 3.13',
-  'Programming Language :: Python :: 3.14'
+  'Programming Language :: Python :: 3.14',
+  'Programming Language :: Python :: 3.15',
+  'Topic :: Internet :: Name Service (DNS)',
+  'Typing :: Typed'
 ]
 dependencies = [
-  "octodns (>=1.10.0,<2.0.0)",
-  "pydantic (>=2.10.5,<3.0.0)",
-  "pynetbox (>=7.4.1,<8.0.0)",
-  "requests (>=2.32.3,<3.0.0)"
+  "octodns>=1.10.0,<2.0.0",
+  # Each pydantic release pins one pydantic-core, and each floor is the
+  # lowest pydantic whose pydantic-core has wheels for that Python. Without
+  # a wheel, the pydantic-core sdist fails to build on a newer Python.
+  "pydantic>=2.10.5,<3.0.0; python_version < '3.14'",
+  "pydantic>=2.12.0,<3.0.0; python_version == '3.14'",
+  "pydantic>=2.14.0,<3.0.0; python_version >= '3.15'",
+  "pynetbox>=7.4.1,<8.0.0",
+  "requests>=2.32.3,<3.0.0"
 ]
 description = "A NetBox source for octoDNS."
 dynamic = ["version"]
-homepage = "https://github.com/sukiyaki/octodns-netbox"
 license = "MIT"
 name = "octodns-netbox"
 readme = "README.md"
-requires-python = ">=3.10,<4"
+requires-python = ">=3.11,<4"
 
-[tool.poetry]
-version = "0.0.0"
+[project.urls]
+Homepage = "https://github.com/sukiyaki/octodns-netbox"
+Documentation = "https://github.com/sukiyaki/octodns-netbox/tree/main/docs"
+Changelog = "https://github.com/sukiyaki/octodns-netbox/releases"
+Issues = "https://github.com/sukiyaki/octodns-netbox/issues"
 
-[tool.poetry.group.dev.dependencies]
-pre-commit = "^4.0.0"
-pytest = "^9.0.0"
-pytest-cov = "^7.0.0"
-requests-mock = "^1.12.0"
-tox = "^4.0.0"
+[dependency-groups]
+dev = [
+  "coverage-conditional-plugin>=0.9.0",
+  "hypothesis>=6.141.0",
+  "mypy>=2.4.1",
+  "pre-commit>=4.0.0",
+  "pre-commit-hooks>=6.0.0",
+  "pytest>=9.0.0",
+  "pytest-cov>=7.0.0",
+  "requests-mock>=1.12.0",
+  "ruff>=0.17.6",
+  "zizmor>=1.33.1"
+]
+# The tools that CI and the release workflow run on the built files.
+release = [
+  "packaging>=26.4",
+  "twine>=7.0.0"
+]
 
-[tool.poetry.requires-plugins]
-poetry-dynamic-versioning = {version = ">=1.0.0,<2.0.0", extras = ["plugin"]}
+[tool.coverage.coverage_conditional_plugin.rules]
+# The source uses octoDNS's Rrset when it exists (1.22 and later) and Rr
+# otherwise. A line marked with a rule's name is left out of the report when
+# the rule is true, so each CI job measures the side it runs: "test" the
+# Rrset side, "lowest" the Rr side.
+no-cover-with-rrset = "package_version('octodns') >= (1, 22)"
+no-cover-without-rrset = "package_version('octodns') < (1, 22)"
 
-[tool.poetry-dynamic-versioning]
-bump = true
-enable = true
-metadata = false
-style = "pep440"
-vcs = "git"
+[tool.coverage.report]
+fail_under = 100
+
+[tool.coverage.run]
+plugins = ["coverage_conditional_plugin"]
+source = ["octodns_netbox"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/octodns_netbox"]
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+# PyPI rejects local versions, so drop the "+g<sha>" part: 0.5.1.devN.
+local_scheme = "no-local-version"
+
+[tool.mypy]
+files = ["octodns_netbox"]
+pretty = true
+python_version = "3.11"
+strict = true
+
+[[tool.mypy.overrides]]
+# Neither ships type information. pydantic and requests do.
+ignore_missing_imports = true
+module = ["octodns.*", "pynetbox.*"]
+
+[tool.pytest.ini_options]
+addopts = ["--cov", "--cov-report=term-missing"]
+# Fail on a deprecated octoDNS call from this package. octoDNS attributes the
+# DeprecationWarning of Rr and Record.from_rrs to the module that calls them.
+filterwarnings = ["error::DeprecationWarning:octodns_netbox"]
+testpaths = ["tests"]
+
+[tool.ruff]
+# tests/live/run.py imports cases, record, and seed from its own directory.
+src = [".", "tests/live"]
+target-version = "py311"
+
+[tool.ruff.lint]
+# Ruff 0.15's default rules (E4, E7, E9, F), import sorting (I), pyupgrade
+# (UP), bugbear (B), logging calls (G), ruff's own rules (RUF), simplify (SIM),
+# and two more rules that ruff 0.17's wider default reported on this code.
+# A category takes every stable rule of that group in the ruff version that
+# uv.lock pins. A new rule can arrive only with a ruff update,
+# which Renovate opens as a PR, and lint fails in that PR if the rule finds a
+# problem. Single codes would keep those rules out without anyone seeing them.
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "G", "RUF", "SIM", "BLE001", "C405"]
+
+[tool.ruff.lint.per-file-ignores]
+# These files hold host names with Greek and Turkish letters, such as α and ı,
+# that RUF001 and RUF003 report because they look like Latin letters.
+"tests/live/seed.py" = ["RUF001", "RUF003"]
+"tests/test_octodns_netbox.py" = ["RUF001", "RUF003"]
+
+[tool.uv]
+# uv.lock is written by uv 0.13.9 (lock revision 5). An older uv stops here
+# instead of rewriting it. setup-uv in CI reads this and installs the newest
+# uv that satisfies it.
+required-version = ">=0.13.9"
+# uv build installs the build backend in a separate environment, which
+# uv.lock does not cover. These pins fix each package there, and uv.lock
+# records them. Renovate lists updates on the Dependency Dashboard; see
+# CONTRIBUTING.md.
+build-constraint-dependencies = [
+  "hatch-vcs==0.5.0",
+  "hatchling==1.33.0",
+  "packaging==26.4",
+  "pathspec==1.1.1",
+  "pluggy==1.7.0",
+  "setuptools==84.2.1",
+  "setuptools-scm==10.3.4",
+  "tomlkit==0.15.3",
+  "trove-classifiers==2026.9.21.13",
+  "vcs-versioning==2.6.0"
+]

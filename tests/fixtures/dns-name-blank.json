@@ -1,0 +1,113 @@
+{
+  "source": {
+    "url": "http://netbox.example.com",
+    "field_name": "dns_name"
+  },
+  "init": [],
+  "zones": {
+    "blank-field.example.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?dns_name__ic=blank-field.example&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 1,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 78,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/78/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/78/",
+                  "display": "192.0.14.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.14.2/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "named.blank-field.example",
+                  "description": "",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "14.0.192.in-addr.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?dns_name__empty=false&parent=192.0.14.0%2F24&family=4&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 1,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 78,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/78/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/78/",
+                  "display": "192.0.14.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.14.2/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "named.blank-field.example",
+                  "description": "",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

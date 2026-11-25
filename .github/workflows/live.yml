@@ -1,0 +1,132 @@
+name: live
+
+on:
+  pull_request:
+  schedule:
+  # Weekly, for the rows whose inputs can move without a commit: netbox-latest,
+  # whose image moves to each new NetBox release, and the lowest rows, which
+  # resolve their dependencies when they run. A weekly rerun of the locked rows
+  # would reuse the same NetBox image tags and the same uv.lock.
+  - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new commit on a pull request cancels the run of the older commit. A rerun,
+# which keeps the commit of its first attempt, and any other event get a group
+# of their own run, so they never cancel the newest commit's run, and the
+# schedule and a manual run are never cancelled and never wait.
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{ github.event_name == 'pull_request'
+    && github.run_attempt == '1' && github.event.pull_request.number
+    || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.run_attempt == '1' }}
+
+jobs:
+  # CONTRIBUTING.md lists what each row checks that no other row checks.
+  #
+  # A job-level if cannot read the matrix, so each set of events gets its own
+  # job. The name, not the Python version, names each check, so a ruleset can
+  # require it across Python upgrades.
+  live:
+    name: live (${{ matrix.row }})
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - row: netbox-4.0-token-v1
+          netbox: '4.0'
+          python: '3.15'
+          token: 1
+        - row: netbox-4.7-token-v1
+          netbox: '4.7'
+          python: '3.11'
+          token: 1
+        - row: netbox-4.7-token-v2
+          netbox: '4.7'
+          python: '3.15'
+          token: 2
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      with:
+        python-version: ${{ matrix.python }}
+    - run: >-
+        uv run --locked tests/live/run.py
+        --netbox ${{ matrix.netbox }}
+        --token-version ${{ matrix.token }}
+        --output-dir live-output
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      if: always()
+      with:
+        name: live-${{ matrix.row }}
+        path: live-output/
+
+  lowest:
+    name: live (${{ matrix.row }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - row: netbox-4.0-token-v1-lowest
+          netbox: '4.0'
+          token: 1
+        - row: netbox-4.7-token-v2-lowest
+          netbox: '4.7'
+          token: 2
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      with:
+        python-version: '3.11'
+    # These rows resolve their own versions, so uv.lock cannot apply.
+    - run: >-
+        uv run tests/live/run.py
+        --netbox ${{ matrix.netbox }}
+        --token-version ${{ matrix.token }}
+        --output-dir live-output
+      env:
+        UV_RESOLUTION: lowest-direct
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      if: always()
+      with:
+        name: live-${{ matrix.row }}
+        path: live-output/
+
+  # The floating latest image, which is the newest stable NetBox with the
+  # newest netbox-docker. It never runs on a pull request, so a new NetBox
+  # release cannot fail one. It compares only the zones, and run.py prints the
+  # NetBox version that ran.
+  latest:
+    name: live (netbox-latest)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      with:
+        python-version: '3.15'
+    - run: >-
+        uv run --locked tests/live/run.py
+        --netbox latest
+        --token-version 2
+        --output-dir live-output
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      if: always()
+      with:
+        name: live-netbox-latest
+        path: live-output/

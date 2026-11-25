@@ -1,0 +1,9 @@
+---
+? ''
+: ttl: 60
+  type: A
+  value: 192.0.19.2
+www:
+  ttl: 60
+  type: A
+  value: 192.0.19.3

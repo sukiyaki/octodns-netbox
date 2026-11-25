@@ -1,0 +1,13 @@
+---
+tagged-dns:
+  ttl: 120
+  type: A
+  value: 192.0.5.1
+tagged-dns-external:
+  ttl: 120
+  type: A
+  value: 192.0.5.2
+untagged:
+  ttl: 120
+  type: A
+  value: 192.0.5.3

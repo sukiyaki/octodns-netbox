@@ -1,0 +1,195 @@
+{
+  "source": {
+    "url": "http://netbox.example.com"
+  },
+  "init": [],
+  "zones": {
+    "0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=2001%3Adb8%3A%3A%2F116&family=6&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 2,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 25,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/25/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/25/",
+                  "display": "2001:db8::2/64",
+                  "family": {
+                    "value": 6,
+                    "label": "IPv6"
+                  },
+                  "address": "2001:db8::2/64",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "dnsname-2001-0db8-2.example.com",
+                  "description": "description-2001-0db8-2.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 26,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/26/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/26/",
+                  "display": "2001:db8::3/100",
+                  "family": {
+                    "value": 6,
+                    "label": "IPv6"
+                  },
+                  "address": "2001:db8::3/100",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "dnsname-2001-0db8-3.example.com",
+                  "description": "description-2001-0db8-3.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "0.0.0.0.0.0.1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=2001%3Adb8%3A%3A1000%3A0%2F124&family=6&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 1,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 27,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/27/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/27/",
+                  "display": "2001:db8::1000:1/64",
+                  "family": {
+                    "value": 6,
+                    "label": "IPv6"
+                  },
+                  "address": "2001:db8::1000:1/64",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "dnsname-2001-0db8-1000-1.example.com",
+                  "description": "description-2001-0db8-1000-1.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "1.0.0.0.1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=2001%3Adb8%3A%3A1%3A1%2F128&family=6&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 1,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 7,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/7/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/7/",
+                  "display": "2001:db8::1:1/64",
+                  "family": {
+                    "value": 6,
+                    "label": "IPv6"
+                  },
+                  "address": "2001:db8::1:1/64",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "dnsname-host1.example.com",
+                  "description": "description-host1.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

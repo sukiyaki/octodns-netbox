@@ -1,0 +1,96 @@
+---
+? ''
+: ttl: 60
+  type: AAAA
+  value: 2001:db8::1:7
+a-test:
+  ttl: 60
+  type: A
+  value: 192.0.4.7
+description-192-0-2-1:
+  ttl: 60
+  type: A
+  value: 192.0.2.1
+description-192-0-2-2:
+  ttl: 60
+  type: A
+  value: 192.0.2.2
+description-192-0-2-3:
+  ttl: 60
+  type: A
+  value: 192.0.2.3
+description-192-0-2-65:
+  ttl: 60
+  type: A
+  value: 192.0.2.65
+description-192-0-3-1:
+  ttl: 60
+  type: A
+  value: 192.0.3.1
+description-2001-0db8-2:
+  ttl: 60
+  type: AAAA
+  value: 2001:db8::2
+description-2001-0db8-3:
+  ttl: 60
+  type: AAAA
+  value: 2001:db8::3
+description-2001-0db8-1000-1:
+  ttl: 60
+  type: AAAA
+  value: 2001:db8::1000:1
+description-host1:
+- ttl: 60
+  type: A
+  value: 192.0.4.1
+- ttl: 60
+  type: AAAA
+  value: 2001:db8::1:1
+description-host2.subdomain1:
+- ttl: 60
+  type: A
+  value: 192.0.4.2
+- ttl: 60
+  type: AAAA
+  value: 2001:db8::1:2
+description-host2.subdomain2:
+- ttl: 60
+  type: A
+  value: 192.0.4.2
+- ttl: 60
+  type: AAAA
+  value: 2001:db8::1:2
+description-host3.subdomain2:
+- ttl: 60
+  type: A
+  value: 192.0.4.3
+- ttl: 60
+  type: AAAA
+  value: 2001:db8::1:3
+description-multiptr-192-0-2-2:
+  ttl: 60
+  type: A
+  value: 192.0.2.2
+description-roundrobin:
+- ttl: 60
+  type: A
+  values:
+  - 192.0.4.5
+  - 192.0.4.6
+- ttl: 60
+  type: AAAA
+  values:
+  - 2001:db8::1:5
+  - 2001:db8::1:6
+description-subdomain1:
+  ttl: 60
+  type: AAAA
+  value: 2001:db8::1:4
+host.test:
+  ttl: 60
+  type: A
+  value: 192.0.4.8
+subdomain1:
+  ttl: 60
+  type: A
+  value: 192.0.4.4

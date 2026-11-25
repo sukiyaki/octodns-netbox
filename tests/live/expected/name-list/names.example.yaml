@@ -1,0 +1,17 @@
+---
+four:
+  ttl: 60
+  type: A
+  value: 192.0.13.2
+one:
+  ttl: 60
+  type: A
+  value: 192.0.13.1
+three:
+  ttl: 60
+  type: A
+  value: 192.0.13.2
+two:
+  ttl: 60
+  type: A
+  value: 192.0.13.1

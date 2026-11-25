@@ -1,0 +1,9 @@
+---
+example-net:
+  ttl: 60
+  type: A
+  value: 192.0.6.2
+web-example-net:
+  ttl: 60
+  type: A
+  value: 192.0.6.1

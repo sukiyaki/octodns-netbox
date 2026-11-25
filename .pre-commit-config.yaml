@@ -1,43 +1,88 @@
+# Every hook runs its tool from the project environment, so uv.lock pins each
+# tool and its dependencies, and pyproject.toml holds their settings. Each
+# hook's name, entry, file selection, and stages copy the hook of the same id
+# in pre-commit-hooks v6.0.0, ruff-pre-commit v0.17.6, and zizmor-pre-commit
+# v1.33.1. The zizmor hook reads only the workflows, and it runs offline, so
+# it skips the audits that call the GitHub API.
 repos:
-- repo: https://github.com/Lucas-C/pre-commit-hooks
-  rev: v1.5.6
-  hooks:
-  - id: forbid-tabs
-  - id: remove-tabs
-- repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v6.0.0
+- repo: local
   hooks:
   - id: check-added-large-files
+    name: check for added large files
+    entry: uv run --locked check-added-large-files
+    language: system
+    stages: [pre-commit, pre-push, manual]
   - id: check-builtin-literals
+    name: check builtin type constructor use
+    entry: uv run --locked check-builtin-literals
+    language: system
+    types: [python]
   - id: check-case-conflict
+    name: check for case conflicts
+    entry: uv run --locked check-case-conflict
+    language: system
   - id: check-yaml
+    name: check yaml
+    entry: uv run --locked check-yaml
+    language: system
+    types: [yaml]
     args: [--unsafe]
   - id: check-toml
+    name: check toml
+    entry: uv run --locked check-toml
+    language: system
+    types: [toml]
   - id: debug-statements
+    name: debug statements (python)
+    entry: uv run --locked debug-statement-hook
+    language: system
+    types: [python]
   - id: end-of-file-fixer
+    name: fix end of files
+    entry: uv run --locked end-of-file-fixer
+    language: system
+    types: [text]
+    stages: [pre-commit, pre-push, manual]
   - id: forbid-new-submodules
+    name: forbid new submodules
+    entry: uv run --locked forbid-new-submodules
+    language: system
+    types: [directory]
   - id: trailing-whitespace
+    name: trim trailing whitespace
+    entry: uv run --locked trailing-whitespace-fixer
+    language: system
+    types: [text]
+    stages: [pre-commit, pre-push, manual]
   - id: mixed-line-ending
-- repo: https://github.com/astral-sh/ruff-pre-commit
-  # Ruff version.
-  rev: v0.15.12
-  hooks:
-    # Run the linter.
-  - id: ruff
+    name: mixed line ending
+    entry: uv run --locked mixed-line-ending
+    language: system
+    types: [text]
+  - id: ruff-check
+    name: ruff check
+    entry: uv run --locked ruff check --force-exclude
+    language: system
+    types_or: [python, pyi, jupyter]
+    require_serial: true
     args: [--fix]
-    # Run the formatter.
   - id: ruff-format
-- repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v1.20.2
-  hooks:
+    name: ruff format
+    entry: uv run --locked ruff format --force-exclude
+    language: system
+    types_or: [python, pyi, jupyter, markdown]
+    require_serial: true
   - id: mypy
-    files: octodns_netbox
-    args: [--ignore-missing-imports, --pretty]
-    additional_dependencies: [types-requests]
-- repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  rev: v2.16.0
-  hooks:
-  - id: pretty-format-yaml
-    args: [--autofix]
-  - id: pretty-format-toml
-    args: [--autofix]
+    name: mypy
+    entry: uv run --locked mypy
+    language: system
+    files: ^octodns_netbox/
+    pass_filenames: false
+  - id: zizmor
+    name: zizmor
+    entry: uv run --locked zizmor --offline
+    language: system
+    types: [yaml]
+    files: ^\.github/workflows/[^/]+\.ya?ml$
+    require_serial: true
+    args: [--no-progress]

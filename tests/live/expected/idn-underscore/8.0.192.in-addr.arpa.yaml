@@ -1,0 +1,5 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  value: xn--hst-sna.ex_ample.com.

@@ -1,0 +1,414 @@
+{
+  "source": {
+    "url": "http://netbox.example.com",
+    "populate_vrf_name": "mgmt"
+  },
+  "init": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "http://netbox.example.com/api/ipam/vrfs/?name=mgmt&limit=0"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "count": 1,
+          "next": null,
+          "previous": null,
+          "results": [
+            {
+              "id": 1,
+              "url": "http://netbox.example.com/api/ipam/vrfs/1/",
+              "display_url": "http://netbox.example.com/ipam/vrfs/1/",
+              "display": "mgmt",
+              "name": "mgmt",
+              "rd": null,
+              "tenant": null,
+              "enforce_unique": true,
+              "description": "",
+              "owner": null,
+              "comments": "",
+              "import_targets": [],
+              "export_targets": [],
+              "tags": [],
+              "custom_fields": {},
+              "created": "2000-01-01T00:00:00.000000Z",
+              "last_updated": "2000-01-01T00:00:00.000000Z",
+              "ipaddress_count": 4,
+              "prefix_count": 0
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "zones": {
+    "example.com.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__ic=example.com&vrf_id=1&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 4,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 20,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/20/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/20/",
+                  "display": "192.0.2.1/29",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.2.1/29",
+                  "vrf": {
+                    "id": 1,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/1/",
+                    "display": "mgmt",
+                    "name": "mgmt",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "vrf-mgmt-dnsname-192-0-2-1.example.com",
+                  "description": "vrf-mgmt-description-192-0-2-1.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 21,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/21/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/21/",
+                  "display": "192.0.2.2/29",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.2.2/29",
+                  "vrf": {
+                    "id": 1,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/1/",
+                    "display": "mgmt",
+                    "name": "mgmt",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "vrf-mgmt-dnsname-192-0-2-2.example.com",
+                  "description": "vrf-mgmt-description-192-0-2-2.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 22,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/22/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/22/",
+                  "display": "192.0.2.3/29",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.2.3/29",
+                  "vrf": {
+                    "id": 1,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/1/",
+                    "display": "mgmt",
+                    "name": "mgmt",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "vrf-mgmt-dnsname-192-0-2-3.example.com",
+                  "description": "vrf-mgmt-description-192-0-2-3.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 24,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/24/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/24/",
+                  "display": "192.0.3.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.3.2/24",
+                  "vrf": {
+                    "id": 1,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/1/",
+                    "display": "mgmt",
+                    "name": "mgmt",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "vrf-mgmt-dnsname-192-0-3-2.example.com",
+                  "description": "vrf-mgmt-description-192-0-3-2.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "2.0.192.in-addr.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=192.0.2.0%2F24&family=4&vrf_id=1&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 3,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 20,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/20/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/20/",
+                  "display": "192.0.2.1/29",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.2.1/29",
+                  "vrf": {
+                    "id": 1,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/1/",
+                    "display": "mgmt",
+                    "name": "mgmt",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "vrf-mgmt-dnsname-192-0-2-1.example.com",
+                  "description": "vrf-mgmt-description-192-0-2-1.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 21,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/21/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/21/",
+                  "display": "192.0.2.2/29",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.2.2/29",
+                  "vrf": {
+                    "id": 1,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/1/",
+                    "display": "mgmt",
+                    "name": "mgmt",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "vrf-mgmt-dnsname-192-0-2-2.example.com",
+                  "description": "vrf-mgmt-description-192-0-2-2.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 22,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/22/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/22/",
+                  "display": "192.0.2.3/29",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.2.3/29",
+                  "vrf": {
+                    "id": 1,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/1/",
+                    "display": "mgmt",
+                    "name": "mgmt",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "vrf-mgmt-dnsname-192-0-2-3.example.com",
+                  "description": "vrf-mgmt-description-192-0-2-3.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "3.0.192.in-addr.arpa.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__empty=false&parent=192.0.3.0%2F24&family=4&vrf_id=1&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 1,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 24,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/24/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/24/",
+                  "display": "192.0.3.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.3.2/24",
+                  "vrf": {
+                    "id": 1,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/1/",
+                    "display": "mgmt",
+                    "name": "mgmt",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "vrf-mgmt-dnsname-192-0-3-2.example.com",
+                  "description": "vrf-mgmt-description-192-0-3-2.example.com",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

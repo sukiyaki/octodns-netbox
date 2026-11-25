@@ -1,1131 +1,988 @@
+"""Unit tests for NetboxSource.
+
+Every NetBox response here was recorded from a real NetBox by
+tests/live/run.py. tests/fixtures/<case>.json holds one case of
+tests/live/cases.py, and tests/live/expected/<case>/ holds the zones the live
+run must dump for it, so the replay and the live run check the same zones.
+"""
+
+import ast
+import json
+import logging
+import re
+from contextlib import contextmanager
+from ipaddress import ip_interface
+from pathlib import Path
+
 import pytest
 import requests_mock
+from octodns.idna import IdnaError
+from octodns.manager import Manager
+from octodns.provider.yaml import YamlProvider
 from octodns.record import Record
+from octodns.record.exception import ValidationError as RecordValidationError
 from octodns.zone import Zone
 from pydantic import ValidationError
 
 from octodns_netbox import NetboxSource
 
-from .util import SimpleProvider, load_fixture
+from .util import SimpleProvider
+
+FIXTURES = Path(__file__).parent / "fixtures"
+EXPECTED = Path(__file__).parent / "live" / "expected"
 
 
 @pytest.fixture(autouse=True)
-def mock_requests():
+def no_other_requests():
+    """Fail every request a test does not replay from a recording."""
+    with requests_mock.Mocker():
+        yield
+
+
+def load_case(name):
+    return json.loads((FIXTURES / f"{name}.json").read_text())
+
+
+@contextmanager
+def replaying(exchanges):
+    """Answer the recorded requests, and fail unless each is sent exactly once."""
     with requests_mock.Mocker() as mock:
-        mock.get(
-            "http://netbox.example.com/api/ipam/vrfs/?limit=0",
-            complete_qs=True,
-            json=load_fixture("vrfs.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/vrfs/?name=mgmt&limit=0",
-            complete_qs=True,
-            json=load_fixture("vrfs.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/vrfs/?name=TEST&limit=0",
-            complete_qs=True,
-            json={"count": 0, "next": None, "previous": None, "results": []},
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/vrfs/1/",
-            json=load_fixture("vrf.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F27&family=4&description__empty=false&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_v4_non_octet_boundary.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F27&family=4&dns_name__empty=false&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_v4_non_octet_boundary.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F27&family=4&vrf_id=1&description__empty=false&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_v4_non_octet_boundary_vrf_mgmt.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F24&family=4&description__empty=false&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_v4_octet_boundary.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.2.0%2F24&family=4&dns_name__empty=false&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_v4_octet_boundary.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=192.0.3.0%2F24&family=4&vrf_id=null&description__empty=false&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_v4_octet_boundary_vrf_global.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F100&family=6&description__empty=false&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_v6_non_nibble_boundary.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F100&family=6&dns_name__empty=false&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_v6_non_nibble_boundary.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F64&family=6&description__empty=false&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_v6_nibble_boundary.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?parent=2001%3Adb8%3A%3A%2F64&family=6&dns_name__empty=false&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_v6_nibble_boundary.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?description__ic=example.com&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_example_com.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?description__ic=subdomain1.example.com&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_subdomain1_example_com.json"),
-        )
-        mock.get(
-            "http://netbox.example.com/api/ipam/ip-addresses/?dns_name__ic=example.com&limit=0",
-            complete_qs=True,
-            json=load_fixture("ip_addresses_example_com.json"),
-        )
-
+        matchers = [
+            mock.register_uri(
+                exchange["request"]["method"],
+                exchange["request"]["url"],
+                complete_qs=True,
+                status_code=exchange["response"]["status"],
+                json=exchange["response"]["json"],
+            )
+            for exchange in exchanges
+        ]
         yield mock
+    assert [matcher.call_count for matcher in matchers] == [1] * len(matchers)
 
 
-class TestNetboxSourceFailSenarios:
-    def test_init_failed_due_to_missing_url(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource("test")
-        assert excinfo.value.errors()[0]["loc"] == ("url",)
-        assert excinfo.value.errors()[0]["type"] == "missing"
-        assert excinfo.value.errors()[1]["loc"] == ("token",)
-        assert excinfo.value.errors()[1]["type"] == "missing"
+def connect(case):
+    with replaying(case["init"]):
+        return NetboxSource("netbox", token="not-recorded", **case["source"])
 
-    def test_init_failed_due_to_missing_token(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource("test", url="http://netbox.example.com/")
-        assert excinfo.value.errors()[0]["loc"] == ("token",)
-        assert excinfo.value.errors()[0]["type"] == "missing"
 
-    def test_init_maintain_backword_compatibility_for_url(self):
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/api/",
-            token="testtoken",
-        )
-        assert source.url == "http://netbox.example.com"
+def populate(source, case, zone_name, lenient=False):
+    recorded = case["zones"][zone_name]
+    zone = Zone(zone_name, recorded["sub_zones"])
+    with replaying(recorded["exchanges"]):
+        source.populate(zone, lenient=lenient)
+    return zone
 
-    def test_init_failed_due_to_invalid_field_name_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                field_name=["dns_name", "description"],
-            )
 
-        assert excinfo.value.errors()[0]["loc"] == ("field_name",)
-        assert excinfo.value.errors()[0]["type"] == "string_type"
+def expected_zone(case_name, zone_name, sub_zones):
+    zone = Zone(zone_name, sub_zones)
+    provider = YamlProvider("expected", str(EXPECTED / case_name), enforce_order=False)
+    provider.populate(zone)
+    return zone
 
-    def test_init_failed_due_to_invalid_ttl_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test", url="http://netbox.example.com/", token="testtoken", ttl=[10]
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("ttl",)
-        assert excinfo.value.errors()[0]["type"] == "int_type"
 
-    def test_init_failed_due_to_invalid_ttl_value(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test", url="http://netbox.example.com/", token="testtoken", ttl="ten"
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("ttl",)
-        assert excinfo.value.errors()[0]["type"] == "int_parsing"
+def expected_zone_names(case_name):
+    root = EXPECTED / case_name
+    # Zone 0/26.2.0.192.in-addr.arpa. lives in 0/26.2.0.192.in-addr.arpa.yaml.
+    return sorted(
+        path.relative_to(root).as_posix()[: -len("yaml")]
+        for path in root.rglob("*.yaml")
+    )
 
-    def test_init_failed_due_to_invalid_populate_tags_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_tags="tag",
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("populate_tags",)
-        assert excinfo.value.errors()[0]["type"] == "list_type"
 
-    def test_init_failed_due_to_invalid_populate_vrf_id_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_vrf_id=[10],
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("populate_vrf_id", "int")
-        assert excinfo.value.errors()[0]["type"] == "int_type"
-        assert excinfo.value.errors()[1]["loc"] == (
-            "populate_vrf_id",
-            "literal['null']",
-        )
-        assert excinfo.value.errors()[1]["type"] == "literal_error"
+def assert_populates_expected_zones(source, case, case_name):
+    for zone_name, recorded in case["zones"].items():
+        zone = populate(source, case, zone_name)
+        expected = expected_zone(case_name, zone_name, recorded["sub_zones"])
+        assert expected.changes(zone, SimpleProvider()) == [], zone_name
 
-    def test_init_failed_due_to_invalid_populate_vrf_id_value(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_vrf_id="ten",
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("populate_vrf_id", "int")
-        assert excinfo.value.errors()[0]["type"] == "int_parsing"
-        assert excinfo.value.errors()[1]["loc"] == (
-            "populate_vrf_id",
-            "literal['null']",
-        )
-        assert excinfo.value.errors()[1]["type"] == "literal_error"
 
-    def test_init_failed_because_both_populate_vrf_id_populate_vrf_name_are_provided(
-        self,
+SETTINGS = {"url": "http://netbox.example.com/", "token": "testtoken"}
+
+
+def rejected_keys(**settings):
+    """The config keys NetboxSource names when it refuses `settings`."""
+    with pytest.raises(ValidationError) as excinfo:
+        NetboxSource("netbox", **settings)
+    return {error["loc"][0] for error in excinfo.value.errors()}
+
+
+def test_init_requires_url_and_token():
+    assert rejected_keys() == {"url", "token"}
+    assert rejected_keys(url=SETTINGS["url"]) == {"token"}
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("url", "netbox.example.com"),
+        ("field_name", ["dns_name", "description"]),
+        ("populate_tags", "tag"),
+        ("populate_vrf_id", [10]),
+        ("populate_vrf_id", "ten"),
+        ("populate_vrf_name", ["TEST"]),
+        ("populate_subdomains", "ok"),
+        ("multivalue_ptr", "ok"),
+        ("ttl", [10]),
+        ("ttl", "ten"),
+        ("ssl_verify", "ok"),
+    ],
+)
+def test_init_rejects_a_value_of_the_wrong_type(key, value):
+    assert rejected_keys(**{**SETTINGS, key: value}) == {key}
+
+
+@pytest.mark.parametrize("key", ["ttl", "populate_vrf_id"])
+@pytest.mark.parametrize("value", [True, False])
+def test_init_rejects_true_or_false_as_a_number(key, value):
+    # pydantic takes a bool as an int, so true would be TTL or VRF ID 1.
+    assert rejected_keys(**{**SETTINGS, key: value}) == {key}
+
+
+@pytest.mark.parametrize("value", [-1, "-1"])
+def test_init_rejects_a_negative_ttl(value):
+    assert rejected_keys(**{**SETTINGS, "ttl": value}) == {"ttl"}
+
+
+@pytest.mark.parametrize("value", ["", " ", "\t"])
+def test_init_rejects_a_blank_populate_vrf_name(value):
+    # NetBox ignores a blank name filter, and would return every VRF.
+    assert rejected_keys(**{**SETTINGS, "populate_vrf_name": value}) == {
+        "populate_vrf_name"
+    }
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "parsed"),
+    [
+        ("ttl", 0, 0),
+        # Values from env/ arrive as strings or numbers.
+        ("ttl", "120", 120),
+        ("ttl", 120.0, 120),
+        ("populate_vrf_id", "5", 5),
+        ("populate_subdomains", "false", False),
+    ],
+)
+def test_init_converts_a_value_from_env_to_the_type_of_the_key(key, value, parsed):
+    source = NetboxSource("netbox", **SETTINGS, **{key: value})
+    assert getattr(source.config, key) == parsed
+
+
+def test_init_rejects_both_populate_vrf_id_and_populate_vrf_name():
+    with pytest.raises(ValidationError, match="Do not set both populate_vrf_id"):
+        NetboxSource("netbox", **SETTINGS, populate_vrf_id=1, populate_vrf_name="mgmt")
+
+
+TOKEN = "nbt_K3yOfTheTest.S3cretOfTheTest0123456789"
+
+
+def pieces_in(text, values):
+    """The pieces of 8 characters of the string values that text holds.
+
+    str() of a ValidationError shortens a long input to its start and end,
+    so a test looks for any piece of a value.
+    """
+    return [
+        value[i : i + 8]
+        for value in values
+        if isinstance(value, str)
+        for i in range(len(value) - 7)
+        if value[i : i + 8] in text
+    ]
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        pytest.param({"token": TOKEN}, id="missing-url"),
+        pytest.param({"url": SETTINGS["url"], "tokne": TOKEN}, id="misspelled-token"),
+        pytest.param(
+            {
+                "url": SETTINGS["url"],
+                "token": TOKEN,
+                "populate_vrf_id": 1,
+                "populate_vrf_name": "vrf-name-value",
+            },
+            id="both-vrf-keys",
+        ),
+        pytest.param(
+            {"url": SETTINGS["url"], "token": TOKEN, "ttl": "ttl-value"},
+            id="wrong-type",
+        ),
+        pytest.param(
+            {"url": SETTINGS["url"], "token": TOKEN, "ttl": "-123456789"},
+            id="negative-ttl",
+        ),
+        pytest.param(
+            {"url": "http://netbox-user:S3cretOfTheUrl@netbox.example", "token": TOKEN},
+            id="url-with-password",
+        ),
+        pytest.param(
+            {"url": SETTINGS["url"], "token": TOKEN.replace(".", "\n.")},
+            id="token-with-line-break",
+        ),
+        pytest.param(
+            {"url": SETTINGS["url"], "token": TOKEN.replace(".", "☃.")},
+            id="token-not-ascii",
+        ),
+    ],
+)
+def test_init_error_contains_no_value_of_a_setting(settings):
+    with pytest.raises(ValidationError) as excinfo:
+        NetboxSource("netbox", **settings)
+    error = excinfo.value
+    for text in (str(error), error.json(), repr(error), repr(error.errors())):
+        assert pieces_in(text, settings.values()) == []
+
+
+def test_init_logs_no_part_of_the_url_or_the_token(caplog):
+    caplog.set_level(logging.DEBUG)
+    settings = {"url": "https://netbox.example.com/S3cretPath", "token": TOKEN}
+    NetboxSource("netbox", **settings)
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert pieces_in(logged, settings.values()) == []
+
+
+BUNDLE = "/etc/ssl/netbox.pem"
+PROXY = "http://proxy.example:3128"
+
+
+@pytest.mark.parametrize(
+    ("bundle_variable", "settings", "verify"),
+    [
+        (None, {}, True),
+        (None, {"ssl_verify": False}, False),
+        # A CA bundle in the environment replaces True, but never False.
+        ("REQUESTS_CA_BUNDLE", {}, BUNDLE),
+        ("REQUESTS_CA_BUNDLE", {"ssl_verify": False}, False),
+        ("CURL_CA_BUNDLE", {}, BUNDLE),
+        ("CURL_CA_BUNDLE", {"ssl_verify": False}, False),
+    ],
+)
+def test_ssl_verify_sets_whether_each_request_verifies_tls(
+    monkeypatch, bundle_variable, settings, verify
+):
+    for variable in (
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "no_proxy",
     ):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_vrf_id=1,
-                populate_vrf_name="TEST",
-            )
-        assert "Do not set both populate_vrf_id and populate_vrf" in str(excinfo.value)
-
-    def test_init_failed_due_to_invalid_populate_vrf_name_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_vrf_name=["TEST"],
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("populate_vrf_name",)
-        assert excinfo.value.errors()[0]["type"] == "string_type"
-
-    def test_init_failed_because_invalid_populate_vrf_name_is_not_found_at_netbox(self):
-        with pytest.raises(ValueError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_vrf_name="TEST",
-            )
-        assert "Failed to retrieve VRF information by name" in str(excinfo.value)
-
-    def test_init_failed_due_to_invalid_populate_subdomains_type(self):
-        with pytest.raises(ValidationError) as excinfo:
-            NetboxSource(
-                "test",
-                url="http://netbox.example.com/",
-                token="testtoken",
-                populate_subdomains="ok",
-            )
-        assert excinfo.value.errors()[0]["loc"] == ("populate_subdomains",)
-        assert excinfo.value.errors()[0]["type"] == "bool_parsing"
+        monkeypatch.delenv(variable, raising=False)
+        monkeypatch.delenv(variable.upper(), raising=False)
+    if bundle_variable is not None:
+        monkeypatch.setenv(bundle_variable, BUNDLE)
+    # A proxy from the environment applies whatever ssl_verify says.
+    monkeypatch.setenv("HTTP_PROXY", PROXY)
+    case = load_case("vrf-name")
+    zone_name = "3.0.192.in-addr.arpa."
+    exchanges = case["init"] + case["zones"][zone_name]["exchanges"]
+    with replaying(exchanges) as mock:
+        source = NetboxSource("netbox", token="t", **case["source"], **settings)
+        source.populate(Zone(zone_name, []))
+    sent = [
+        (request.verify, request.proxies.get("http"))
+        for request in mock.request_history
+    ]
+    assert sent == [(verify, PROXY)] * 2
 
 
-class TestNetboxSourcePopulateIPv4PTRNonOctecBoundary:
-    def test_populate_PTR_v4_non_octet_boundary(self):
-        zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
+V1_TOKEN = "0123456789abcdef0123456789abcdef01234567"
+
+
+@pytest.fixture
+def netrc(tmp_path, monkeypatch):
+    """A netrc file, which requests reads, with a login for every host."""
+    path = tmp_path / "netrc"
+    path.write_text("default login netrc-user password netrc-password\n")
+    monkeypatch.setenv("NETRC", str(path))
+
+
+def test_each_request_sends_the_token_and_no_login_from_netrc(netrc):
+    case = load_case("vrf-name")
+    zone_name = "3.0.192.in-addr.arpa."
+    exchanges = case["init"] + case["zones"][zone_name]["exchanges"]
+    with replaying(exchanges) as mock:
+        source = NetboxSource("netbox", token=V1_TOKEN, **case["source"])
+        source.populate(Zone(zone_name, []))
+    sent = [request.headers.get("Authorization") for request in mock.request_history]
+    assert sent == [f"Token {V1_TOKEN}"] * 2
+
+
+@pytest.mark.parametrize(
+    ("location", "authorization"),
+    [
+        pytest.param("https://netbox.example.com", f"Token {V1_TOKEN}", id="same-host"),
+        pytest.param("http://other.example.com", None, id="other-host"),
+    ],
+)
+def test_a_redirect_sends_the_token_only_to_the_same_host(
+    netrc, location, authorization
+):
+    case = load_case("vrf-name")
+    (exchange,) = case["init"]
+    url = exchange["request"]["url"]
+    moved = url.replace(case["source"]["url"], location)
+    with requests_mock.Mocker() as mock:
+        mock.get(url, complete_qs=True, status_code=301, headers={"Location": moved})
+        mock.get(moved, complete_qs=True, json=exchange["response"]["json"])
+        NetboxSource("netbox", token=V1_TOKEN, **case["source"])
+    first, redirected = mock.request_history
+    assert first.headers.get("Authorization") == f"Token {V1_TOKEN}"
+    assert redirected.url == moved
+    assert redirected.headers.get("Authorization") == authorization
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        # A Kubernetes Secret, and a .env file with CRLF line ends.
+        f"{V1_TOKEN}\n",
+        f"{V1_TOKEN}\r\n",
+        f" \t{V1_TOKEN} ",
+    ],
+)
+def test_each_request_sends_the_token_without_the_whitespace_around_it(token):
+    case = load_case("vrf-name")
+    zone_name = "3.0.192.in-addr.arpa."
+    exchanges = case["init"] + case["zones"][zone_name]["exchanges"]
+    with replaying(exchanges) as mock:
+        source = NetboxSource("netbox", token=token, **case["source"])
+        source.populate(Zone(zone_name, []))
+    sent = [request.headers.get("Authorization") for request in mock.request_history]
+    assert sent == [f"Token {V1_TOKEN}"] * 2
+
+
+@pytest.mark.parametrize("token", ["1234567890" * 4, "0012345678" * 4])
+def test_a_token_of_digits_from_env_is_sent_as_written(tmp_path, monkeypatch, token):
+    # octoDNS turns an env/ value of digits into an int.
+    monkeypatch.setenv("NETBOX_TOKEN", token)
+    case = load_case("vrf-name")
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "providers:\n"
+        "  netbox:\n"
+        "    class: octodns_netbox.NetboxSource\n"
+        f"    url: {case['source']['url']}\n"
+        "    token: env/NETBOX_TOKEN\n"
+        f"    populate_vrf_name: {case['source']['populate_vrf_name']}\n"
+        "zones: {}\n"
+    )
+    with replaying(case["init"]) as mock:
+        Manager(str(config))
+    (request,) = mock.request_history
+    assert request.headers.get("Authorization") == f"Token {token}"
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        f"{V1_TOKEN[:20]} {V1_TOKEN[20:]}",
+        f"{V1_TOKEN[:20]}\n{V1_TOKEN[20:]}",
+        f"{V1_TOKEN[:20]}\x00{V1_TOKEN[20:]}",
+        f"{V1_TOKEN}\x7f",
+        # Printable, but not ASCII as a NetBox token is. http.client sends é in
+        # Latin-1, and cannot send ☃.
+        f"{V1_TOKEN[:20]}é{V1_TOKEN[20:]}",
+        f"{V1_TOKEN}☃",
+    ],
+)
+def test_init_rejects_a_token_that_http_cannot_send(token):
+    assert rejected_keys(url=SETTINGS["url"], token=token) == {"token"}
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://netbox-user:netbox-password@netbox.example.com",
+        "http://netbox-user@netbox.example.com",
+        "http://:netbox-password@netbox.example.com",
+    ],
+)
+def test_init_rejects_a_url_with_a_user_name_or_password(url):
+    assert rejected_keys(url=url, token=V1_TOKEN) == {"url"}
+
+
+@pytest.mark.parametrize("suffix", ["/api", "/api/"])
+def test_url_ending_in_api_sends_each_request_to_one_api_path(suffix):
+    case = load_case("url-api-suffix")
+    source = NetboxSource("netbox", token="t", url=f"http://netbox.example.com{suffix}")
+    assert source.config.url == "http://netbox.example.com"
+    assert_populates_expected_zones(source, case, "url-api-suffix")
+
+
+def test_init_takes_the_name_of_the_source_only_positionally():
+    with pytest.raises(TypeError):
+        NetboxSource(id="netbox", **SETTINGS)
+
+
+def test_config_of_a_source_cannot_change():
+    source = NetboxSource("netbox", **SETTINGS)
+    with pytest.raises(ValidationError):
+        source.config.ttl = 120
+    assert source.config.ttl == 60
+
+
+def test_supports_keys_leave_the_supported_types_and_geo_unchanged():
+    source = NetboxSource("netbox", **SETTINGS, SUPPORTS=["A"], SUPPORTS_GEO=True)
+    assert sorted(source.SUPPORTS) == ["A", "AAAA", "PTR"]
+    assert source.SUPPORTS_GEO is False
+
+
+def test_init_logs_no_warning_for_known_settings(caplog):
+    NetboxSource(
+        "netbox",
+        **SETTINGS,
+        field_name="dns_name",
+        populate_tags=["dns"],
+        populate_vrf_id=1,
+        populate_subdomains=False,
+        multivalue_ptr=True,
+        ttl=120,
+        ssl_verify=False,
+    )
+    assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("populate_tag", ["prod"]),
+        ("populate_vrf", "mgmt"),
+        # Field names and aliases of the 0.5.0 config model.
+        ("SUPPORTS_MULTIVALUE_PTR", True),
+        ("SUPPORTS_DYNAMIC", True),
+        ("SUPPORTS", ["A"]),
+        ("SUPPORTS_GEO", True),
+        ("log", "ignored"),
+    ],
+)
+def test_unknown_key_logs_a_warning_and_changes_no_zone(caplog, key, value):
+    case = load_case("description")
+    with replaying(case["init"]):
+        source = NetboxSource("netbox", token="t", **case["source"], **{key: value})
+    warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert warnings == [f"Unknown setting {key} has no effect."]
+    assert_populates_expected_zones(source, case, "description")
+
+
+def test_id_key_logs_a_warning_like_any_unknown_key(tmp_path, caplog):
+    # octoDNS passes the provider name as the first argument and every key
+    # as a keyword argument.
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "providers:\n"
+        "  netbox:\n"
+        "    class: octodns_netbox.NetboxSource\n"
+        f"    url: {SETTINGS['url']}\n"
+        "    token: t\n"
+        "    id: stray-value\n"
+        "zones: {}\n"
+    )
+    manager = Manager(str(config))
+    assert manager.providers["netbox"].id == "netbox"
+    assert source_warnings(caplog) == ["Unknown setting id has no effect."]
+
+
+def test_populate_vrf_id_null_reads_the_global_vrf():
+    case = load_case("vrf-global-id")
+    assert case["source"]["populate_vrf_id"] == 0
+    with replaying(case["init"]):
         source = NetboxSource(
-            "test", url="http://netbox.example.com/", token="testtoken"
+            "netbox", token="t", **{**case["source"], "populate_vrf_id": "null"}
         )
-        source.populate(zone)
-
-        assert len(zone.records) == 3
-
-        expected = Zone("0/27.2.0.192.in-addr.arpa.", [])
-        for name, data in (
-            (
-                "1",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-192-0-2-1.example.com."],
-                },
-            ),
-            (
-                "2",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-192-0-2-2.example.com."],
-                },
-            ),
-            (
-                "3",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-192-0-2-3.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_PTR_v4_non_octet_boundary_field_name_is_dns_name(self):
-        zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            field_name="dns_name",
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 3
-
-        expected = Zone("0/27.2.0.192.in-addr.arpa.", [])
-        for name, data in (
-            (
-                "1",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["dnsname-192-0-2-1.example.com."],
-                },
-            ),
-            (
-                "2",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["dnsname-192-0-2-2.example.com."],
-                },
-            ),
-            (
-                "3",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["dnsname-192-0-2-3.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_PTR_v4_non_octet_boundary_custom_ttl(self):
-        zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
-        source = NetboxSource(
-            "test", url="http://netbox.example.com/", token="testtoken", ttl=120
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 3
-
-        expected = Zone("0/27.2.0.192.in-addr.arpa.", [])
-        for name, data in (
-            (
-                "1",
-                {
-                    "type": "PTR",
-                    "ttl": 120,
-                    "values": ["description-192-0-2-1.example.com."],
-                },
-            ),
-            (
-                "2",
-                {
-                    "type": "PTR",
-                    "ttl": 120,
-                    "values": ["description-192-0-2-2.example.com."],
-                },
-            ),
-            (
-                "3",
-                {
-                    "type": "PTR",
-                    "ttl": 120,
-                    "values": ["description-192-0-2-3.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_PTR_v4_non_octet_boundary_select_vrf_by_id(self):
-        zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            populate_vrf_id=1,
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 3
-
-        expected = Zone("0/27.2.0.192.in-addr.arpa.", [])
-        for name, data in (
-            (
-                "1",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["vrf-mgmt-description-192-0-2-1.example.com."],
-                },
-            ),
-            (
-                "2",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["vrf-mgmt-description-192-0-2-2.example.com."],
-                },
-            ),
-            (
-                "3",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["vrf-mgmt-description-192-0-2-3.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_PTR_v4_non_octet_boundary_select_vrf_by_name(self):
-        zone = Zone("0/27.2.0.192.in-addr.arpa.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            populate_vrf_name="mgmt",
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 3
-
-        expected = Zone("0/27.2.0.192.in-addr.arpa.", [])
-        for name, data in (
-            (
-                "1",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["vrf-mgmt-description-192-0-2-1.example.com."],
-                },
-            ),
-            (
-                "2",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["vrf-mgmt-description-192-0-2-2.example.com."],
-                },
-            ),
-            (
-                "3",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["vrf-mgmt-description-192-0-2-3.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-
-class TestNetboxSourcePopulateIPv4PTROctecBoundary:
-    def test_populate_PTR_v4_octet_boundary(self):
-        zone = Zone("2.0.192.in-addr.arpa.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 2
-
-        expected = Zone("2.0.192.in-addr.arpa.", [])
-        for name, data in (
-            (
-                "1",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-192-0-2-1.example.com."],
-                },
-            ),
-            (
-                "2",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-192-0-2-2.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_PTR_v4_octet_boundary_multivalue_ptr_enabled(self):
-        zone = Zone("2.0.192.in-addr.arpa.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            multivalue_ptr=True,
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 2
-
-        expected = Zone("2.0.192.in-addr.arpa.", [])
-        for name, data in (
-            (
-                "1",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-192-0-2-1.example.com."],
-                },
-            ),
-            (
-                "2",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": [
-                        "description-192-0-2-2.example.com.",
-                        "description-multiptr-192-0-2-2.example.com.",
-                    ],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_PTR_v4_octet_boundary_field_name_is_dns_name(self):
-        zone = Zone("2.0.192.in-addr.arpa.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            field_name="dns_name",
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 2
-
-        expected = Zone("2.0.192.in-addr.arpa.", [])
-        for name, data in (
-            (
-                "1",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["dnsname-192-0-2-1.example.com."],
-                },
-            ),
-            (
-                "2",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["dnsname-192-0-2-2.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_PTR_v4_octet_boundary_vrf_global_by_id(self):
-        zone = Zone("3.0.192.in-addr.arpa.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            populate_vrf_id=0,
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 1
-
-        expected = Zone("3.0.192.in-addr.arpa.", [])
-        for name, data in (
-            (
-                "1",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-192-0-3-1.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_PTR_v4_octet_boundary_vrf_global_by_name(self):
-        zone = Zone("3.0.192.in-addr.arpa.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            populate_vrf_name="Global",
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 1
-
-        expected = Zone("3.0.192.in-addr.arpa.", [])
-        for name, data in (
-            (
-                "1",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-192-0-3-1.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-
-class TestNetboxSourcePopulateIPv6PTRNonNibbleBoundary:
-    def test_populate_PTR_v6_non_nibble_boundary(self):
-        zone = Zone("0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", [])
-        source = NetboxSource(
-            "test", url="http://netbox.example.com/", token="testtoken"
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 2
-
-        expected = Zone(
-            "0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", []
-        )
-        for name, data in (
-            (
-                "2.0.0.0.0.0.0",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-2001-0db8-2.example.com."],
-                },
-            ),
-            (
-                "3.0.0.0.0.0.0",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-2001-0db8-3.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_PTR_v6_non_nibble_boundary_field_name_is_dns_name(self):
-        zone = Zone("0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            field_name="dns_name",
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 2
-
-        expected = Zone(
-            "0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", []
-        )
-        for name, data in (
-            (
-                "2.0.0.0.0.0.0",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["dnsname-2001-0db8-2.example.com."],
-                },
-            ),
-            (
-                "3.0.0.0.0.0.0",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["dnsname-2001-0db8-3.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-
-class TestNetboxSourcePopulateIPv6PTRNibbleBoundary:
-    def test_populate_PTR_v6_nibble_boundary(self):
-        zone = Zone("0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", [])
-        source = NetboxSource(
-            "test", url="http://netbox.example.com/", token="testtoken"
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 2
-
-        expected = Zone("0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", [])
-        for name, data in (
-            (
-                "2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-2001-0db8-2.example.com."],
-                },
-            ),
-            (
-                "3.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["description-2001-0db8-3.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_PTR_v6_name_nibble_boundary_field_is_dns_name(self):
-        zone = Zone("0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            field_name="dns_name",
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 2
-
-        expected = Zone("0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa.", [])
-        for name, data in (
-            (
-                "2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["dnsname-2001-0db8-2.example.com."],
-                },
-            ),
-            (
-                "3.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0",
-                {
-                    "type": "PTR",
-                    "ttl": 60,
-                    "values": ["dnsname-2001-0db8-3.example.com."],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-
-class TestNetboxSourcePopulateNormal:
-    def test_populate_A_and_AAAA(self):
-        zone = Zone("example.com.", [])
-        source = NetboxSource(
-            "test", url="http://netbox.example.com/", token="testtoken"
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 12
-
-        expected = Zone("example.com.", [])
-        for name, data in (
-            (
-                "description-host1",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.1"],
-                },
-            ),
-            (
-                "description-host1",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:1"],
-                },
-            ),
-            (
-                "description-host2.subdomain1",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.2"],
-                },
-            ),
-            (
-                "description-host2.subdomain1",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:2"],
-                },
-            ),
-            (
-                "description-host2.subdomain2",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.2"],
-                },
-            ),
-            (
-                "description-host2.subdomain2",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:2"],
-                },
-            ),
-            (
-                "description-host3.subdomain2",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.3"],
-                },
-            ),
-            (
-                "description-host3.subdomain2",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:3"],
-                },
-            ),
-            (
-                "description-subdomain1",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:4"],
-                },
-            ),
-            (
-                "description-roundrobin",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.5", "192.0.4.6"],
-                },
-            ),
-            (
-                "description-roundrobin",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:5", "2001:db8::1:6"],
-                },
-            ),
-            (
-                "",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:7"],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_populate_subdomains_is_False(self, caplog):
-        zone = Zone("subdomain1.example.com.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            populate_subdomains=False,
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 3
-
-        expected = Zone("example.com.", [])
-        for name, data in (
-            (
-                "",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.4"],
-                },
-            ),
-            (
-                "description-host2",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.2"],
-                },
-            ),
-            (
-                "description-host2",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:2"],
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_A_and_AAAA_field_is_dns_name(self):
-        zone = Zone("example.com.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            field_name="dns_name",
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 9
-
-        expected = Zone("example.com.", [])
-        for name, data in (
-            (
-                "dnsname-host1",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.1"],
-                },
-            ),
-            (
-                "dnsname-host1",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:1"],
-                },
-            ),
-            (
-                "dnsname-host2.subdomain1",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.2"],
-                },
-            ),
-            (
-                "dnsname-host2.subdomain1",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:2"],
-                },
-            ),
-            (
-                "subdomain1",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.4"],
-                },
-            ),
-            (
-                "dnsname-subdomain1",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:4"],
-                },
-            ),
-            (
-                "dnsname-roundrobin",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.5", "192.0.4.6"],
-                },
-            ),
-            (
-                "dnsname-roundrobin",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:5", "2001:db8::1:6"],
-                },
-            ),
-            (
-                "",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": "2001:db8::1:7",
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_A_and_AAAA_field_is_dns_name_populate_subdomains_is_False(self):
-        zone = Zone("example.com.", [])
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            field_name="dns_name",
-            populate_subdomains=False,
-        )
-        source.populate(zone)
-
-        assert len(zone.records) == 7
-
-        expected = Zone("example.com.", [])
-        for name, data in (
-            (
-                "dnsname-host1",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.1"],
-                },
-            ),
-            (
-                "dnsname-host1",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:1"],
-                },
-            ),
-            (
-                "subdomain1",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.4"],
-                },
-            ),
-            (
-                "dnsname-subdomain1",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:4"],
-                },
-            ),
-            (
-                "dnsname-roundrobin",
-                {
-                    "type": "A",
-                    "ttl": 60,
-                    "values": ["192.0.4.5", "192.0.4.6"],
-                },
-            ),
-            (
-                "dnsname-roundrobin",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": ["2001:db8::1:5", "2001:db8::1:6"],
-                },
-            ),
-            (
-                "",
-                {
-                    "type": "AAAA",
-                    "ttl": 60,
-                    "values": "2001:db8::1:7",
-                },
-            ),
-        ):
-            record = Record.new(expected, name, data)
-            expected.add_record(record)
-
-        changes = expected.changes(zone, SimpleProvider())
-        assert changes == []
-
-    def test_populate_A_and_AAAA_field_is_dns_name_populate_and_defined_sub_zones(
-        self, caplog
+    assert_populates_expected_zones(source, case, "vrf-global-id")
+
+
+@pytest.mark.parametrize("name", sorted(path.name for path in EXPECTED.iterdir()))
+def test_populate_returns_the_zones_the_live_run_dumps(name):
+    case = load_case(name)
+    assert sorted(case["zones"]) == expected_zone_names(name)
+    assert_populates_expected_zones(connect(case), case, name)
+
+
+def source_warnings(caplog):
+    return [
+        r.getMessage()
+        for r in caplog.records
+        if r.levelno >= logging.WARNING and r.name.startswith("NetboxSource")
+    ]
+
+
+def test_populate_warns_about_an_address_whose_ptr_has_values_from_two_vrfs(caplog):
+    case = load_case("description")
+    populate(connect(case), case, "2.0.192.in-addr.arpa.")
+    assert source_warnings(caplog) == [
+        f"PTR {host}.2.0.192.in-addr.arpa. gets a value from each of 2 NetBox IP "
+        f"addresses for 192.0.2.{host}, in VRFs Global, mgmt. Set populate_vrf_id "
+        "or populate_vrf_name to read one VRF."
+        for host in (1, 2, 3)
+    ]
+
+
+def test_populate_warns_only_about_different_values_from_different_vrfs(caplog):
+    case = load_case("vrf-duplicate")
+    populate(connect(case), case, "7.0.192.in-addr.arpa.")
+    # 192.0.7.1 has two names in one VRF, and 192.0.7.2 one name in two VRFs.
+    assert source_warnings(caplog) == [
+        "PTR 3.7.0.192.in-addr.arpa. gets a value from each of 2 NetBox IP "
+        "addresses for 192.0.7.3, in VRFs Global, anycast. Set populate_vrf_id "
+        "or populate_vrf_name to read one VRF."
+    ]
+
+
+def test_populate_does_not_warn_about_vrfs_when_one_vrf_gives_two_values(caplog):
+    case = load_case("vrf-anycast")
+    populate(connect(case), case, "10.0.192.in-addr.arpa.")
+    # Each VRF gives 192.0.10.1 two names, and the Global VRF gives 192.0.10.2
+    # two names. Reading the Global VRF would still give each PTR two values.
+    assert source_warnings(caplog) == []
+
+
+@pytest.mark.parametrize("name", ["multivalue-ptr", "vrf-id", "vrf-global-name"])
+def test_populate_does_not_warn_about_vrfs_with_multivalue_ptr_or_one_vrf(caplog, name):
+    case = load_case(name)
+    source = connect(case)
+    for zone_name in case["zones"]:
+        populate(source, case, zone_name)
+    assert source_warnings(caplog) == []
+
+
+@pytest.mark.parametrize(
+    ("name", "vrfs_with_the_name"),
+    [("vrf-name-not-found", 0), ("vrf-name-shared", 2)],
+)
+def test_init_fails_unless_one_vrf_has_the_populate_vrf_name(name, vrfs_with_the_name):
+    case = load_case(name)
+    assert [e["response"]["json"]["count"] for e in case["init"]] == [
+        vrfs_with_the_name
+    ]
+    with (
+        replaying(case["init"]),
+        pytest.raises(ValueError, match="Failed to retrieve VRF information by name"),
     ):
-        zone = Zone("example.com.", {"subdomain1"})
-        source = NetboxSource(
-            "test",
-            url="http://netbox.example.com/",
-            token="testtoken",
-            field_name="dns_name",
-        )
-        source.populate(zone)
+        NetboxSource("netbox", token="not-recorded", **case["source"])
 
-        assert "Skipping subzone record" in caplog.text
-        assert len(zone.records) == 6
+
+@pytest.mark.parametrize("lenient", [False, True])
+@pytest.mark.parametrize(
+    ("name", "zone_name", "sub_zone", "left_out"),
+    [
+        (
+            "subzones",
+            "example.com.",
+            "subdomain1.example.com.",
+            [
+                ("description-host2.subdomain1.example.com.", "A"),
+                ("description-host2.subdomain1.example.com.", "AAAA"),
+                ("subdomain1.example.com.", "A"),
+            ],
+        ),
+        # octoDNS rejects the record name "see wiki". The source leaves the
+        # name out of the parent zone before it checks it.
+        (
+            "subzone-unusable",
+            "strict-subzone.example.",
+            "lab.strict-subzone.example.",
+            [
+                ("host.lab.strict-subzone.example.", "A"),
+                ("see wiki.lab.strict-subzone.example.", "A"),
+            ],
+        ),
+    ],
+)
+def test_populate_warns_once_for_each_record_inside_a_configured_subzone(
+    caplog, name, zone_name, sub_zone, left_out, lenient
+):
+    # A lenient octoDNS adds the records of a sub-zone to the parent zone.
+    case = load_case(name)
+    sub_zones = case["zones"][zone_name]["sub_zones"]
+    assert [f"{sub}.{zone_name}" for sub in sub_zones] == [sub_zone]
+    zone = populate(connect(case), case, zone_name, lenient=lenient)
+    expected = expected_zone(name, zone_name, sub_zones)
+    assert expected.changes(zone, SimpleProvider()) == []
+    assert sorted(source_warnings(caplog)) == [
+        f"Skipping subzone record: {fqdn} {record_type}, which zone {sub_zone} holds"
+        for fqdn, record_type in left_out
+    ]
+
+
+@pytest.mark.parametrize("lenient", [False, True])
+def test_populate_leaves_a_name_that_it_cannot_use_to_its_subzone(caplog, lenient):
+    # a\u200db has no IDNA form, and a..lab has an empty label. Zone
+    # lab.strict-subzone.example. checks them, so the parent warns only that
+    # it leaves them out.
+    case = load_case("subzone-unusable")
+    zone_name = "strict-subzone.example."
+    (exchange,) = case["zones"][zone_name]["exchanges"]
+    (row,) = [
+        ip
+        for ip in exchange["response"]["json"]["results"]
+        if ip["address"] == "192.0.20.2/24"
+    ]
+    row["description"] = (
+        "a\u200db.lab.strict-subzone.example, a..lab.strict-subzone.example"
+    )
+    zone = populate(connect(case), case, zone_name, lenient=lenient)
+    expected = expected_zone("subzone-unusable", zone_name, ["lab"])
+    assert expected.changes(zone, SimpleProvider()) == []
+    assert source_warnings(caplog) == [
+        f"Skipping subzone record: {fqdn} A, "
+        "which zone lab.strict-subzone.example. holds"
+        for fqdn in [
+            "a\u200db.lab.strict-subzone.example.",
+            "a..lab.strict-subzone.example.",
+        ]
+    ]
+
+
+@pytest.mark.parametrize("lenient", [False, True])
+def test_populate_leaves_the_ptr_record_of_a_configured_subzone_out(caplog, lenient):
+    # Zones 5.0.192.in-addr.arpa. and 2.5.0.192.in-addr.arpa. in one config.
+    # The live cases custom-ttl and ipv4-host dump them one at a time.
+    case = load_case("custom-ttl")
+    zone = Zone("5.0.192.in-addr.arpa.", ["2"])
+    with replaying(case["zones"][zone.name]["exchanges"]):
+        connect(case).populate(zone, lenient=lenient)
+    assert sorted(record.name for record in zone.records) == ["1", "3"]
+    assert source_warnings(caplog) == [
+        "Skipping subzone record: 2.5.0.192.in-addr.arpa. PTR, "
+        "which zone 2.5.0.192.in-addr.arpa. holds"
+    ]
+
+
+CLASSLESS_PARENT_CONFIG = """\
+providers:
+  netbox:
+    class: octodns_netbox.NetboxSource
+    url: {url}
+    token: t
+  cnames:
+    class: octodns.provider.yaml.YamlProvider
+    directory: {directory}/cnames
+  yaml:
+    class: octodns.provider.yaml.YamlProvider
+    directory: {directory}/zones
+zones:
+  21.0.192.in-addr.arpa.:
+    sources: [netbox, cnames]
+    targets: [yaml]
+  0-26.21.0.192.in-addr.arpa.:
+    sources: [netbox]
+    targets: [yaml]
+"""
+
+
+def test_the_parent_of_a_classless_zone_takes_the_cnames_from_another_source(
+    tmp_path,
+):
+    # The config of docs/reverse-zones.md. The CNAME records that RFC 2317
+    # puts in the parent zone come from a YamlProvider, and octoDNS rejects a
+    # CNAME record next to a PTR record.
+    case = load_case("classless-parent")
+    (tmp_path / "cnames").mkdir()
+    (tmp_path / "zones").mkdir()
+    (tmp_path / "cnames" / "21.0.192.in-addr.arpa.yaml").write_text(
+        "".join(
+            f"'{host}':\n  type: CNAME\n  value: {host}.0-26.21.0.192.in-addr.arpa.\n"
+            for host in (1, 63)
+        )
+    )
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        CLASSLESS_PARENT_CONFIG.format(url=case["source"]["url"], directory=tmp_path)
+    )
+    exchanges = [e for zone in case["zones"].values() for e in zone["exchanges"]]
+    with replaying(case["init"] + exchanges):
+        changes = Manager(str(config)).sync(dry_run=False)
+    # The parent gets the two CNAME records and the PTR record of
+    # 192.0.21.64, and the classless zone the PTR records of .1 and .63.
+    assert changes == 5
+
+
+def test_populate_keeps_the_ptr_records_when_a_subzone_names_no_network(caplog):
+    # RFC 2317 lets a classless zone have any name, such as subnet1, which
+    # tells the source no addresses. octoDNS's rule for names still applies.
+    case = load_case("classless-parent")
+    zone = Zone("21.0.192.in-addr.arpa.", ["subnet1"])
+    with replaying(case["zones"][zone.name]["exchanges"]):
+        connect(case).populate(zone)
+    assert sorted(record.name for record in zone.records) == ["1", "63", "64"]
+    assert source_warnings(caplog) == []
+
+
+def test_populate_skips_fqdn_that_only_shares_the_zone_suffix():
+    # https://github.com/sukiyaki/octodns-netbox/issues/78
+    case = load_case("issue-78")
+    (exchange,) = case["zones"]["test.example.com."]["exchanges"]
+    returned = {ip["description"] for ip in exchange["response"]["json"]["results"]}
+    assert returned == {"a-test.example.com", "host.test.example.com"}
+    zone = populate(connect(case), case, "test.example.com.")
+    assert {(record.name, record._type) for record in zone.records} == {("host", "A")}
+
+
+def test_populate_skips_a_name_without_an_idna_form_with_a_warning(caplog):
+    case = load_case("idn")
+    source = connect(case)
+    for zone_name in case["zones"]:
+        populate(source, case, zone_name)
+    skipped = "Skipping the name 'a\\u200db.xn--caf-dma.example.' of 203.0.113.4"
+    warnings = source_warnings(caplog)
+    assert len(warnings) == 2
+    assert all(warning.startswith(skipped) for warning in warnings)
+
+
+# Each description of the idn-case case, and the name that 0.5.0 gave its PTR
+# record on octoDNS 1.10.0, 1.12.0, 1.13.0, and 1.22.0 alike. With one
+# description at a time, 0.5.0 gave the A record the same name, except where a
+# comment says otherwise. With all of them, 0.5.0 stopped the forward zone,
+# because Straße and STRAẞE gave two records of one name, as did ΑΣ and ας.
+IDN_CASE = [
+    ("ΑΣ.α.idn-case.example", "xn--mxa0b.xn--mxa.idn-case.example."),
+    # 0.5.0 lower-cased ΑΣ without the zone name for the A record, and got ας,
+    # xn--mxa8a. The PTR record pointed to ασ, a name without an A record.
+    ("ΑΣ.idn-case.example", "xn--mxa0b.idn-case.example."),
+    ("α.Σ.1.idn-case.example", "xn--mxa.xn--3xa.1.idn-case.example."),
+    ("ΑΣ.1.idn-case.example", "xn--mxa8a.1.idn-case.example."),
+    ("ας.idn-case.example", "xn--mxa8a.idn-case.example."),
+    ("ΑΣ.café.idn-case.example", "xn--mxa0b.xn--caf-dma.idn-case.example."),
+    # The A record of 0.5.0 was xn--1lqs71d.xn--mxa8a, as for ΑΣ.idn-case.example.
+    ("東京.ΑΣ.idn-case.example", "xn--1lqs71d.xn--mxa0b.idn-case.example."),
+    ("ΤΕΣΤ-テスト.idn-case.example", "xn----6lb6bcc9610eucara.idn-case.example."),
+    ("Straße.idn-case.example", "xn--strae-oqa.idn-case.example."),
+    ("STRAẞE.idn-case.example", "xn--strae-oqa.idn-case.example."),
+    ("İstanbul.idn-case.example", "xn--istanbul-o0e.idn-case.example."),
+    ("ıspanak.idn-case.example", "xn--spanak-o9a.idn-case.example."),
+    ("DİYARBAKIR.idn-case.example", "xn--diyarbakir-o2f.idn-case.example."),
+]
+
+
+def test_populate_lower_cases_each_name_as_a_whole_as_0_5_0_did():
+    case = load_case("idn-case")
+    (exchange,) = case["zones"]["11.0.192.in-addr.arpa."]["exchanges"]
+    address = {
+        ip["description"]: ip_interface(ip["address"]).ip
+        for ip in exchange["response"]["json"]["results"]
+    }
+    assert sorted(address) == sorted(name for name, _ in IDN_CASE)
+    source = connect(case)
+    forward = populate(source, case, "idn-case.example.")
+    reverse = populate(source, case, "11.0.192.in-addr.arpa.")
+    a = {(record.fqdn, value) for record in forward.records for value in record.values}
+    assert a == {(fqdn, str(address[name])) for name, fqdn in IDN_CASE}
+    ptr = {
+        (record.fqdn, value) for record in reverse.records for value in record.values
+    }
+    assert ptr == {
+        (f"{address[name].reverse_pointer}.", fqdn) for name, fqdn in IDN_CASE
+    }
+
+
+def test_populate_skips_a_record_name_octodns_cannot_decode_with_a_warning(caplog):
+    case = load_case("invalid-a-label")
+    source = connect(case)
+    for zone_name in case["zones"]:
+        populate(source, case, zone_name)
+    # The PTR record of 192.0.9.2 keeps the name, so only the A record is gone.
+    (warning,) = source_warnings(caplog)
+    assert warning.startswith(
+        "Skipping the name 'xn--bad_label.a-label.example.' of 192.0.9.2 "
+        "in zone a-label.example.: "
+    )
+
+
+def skipped_names(caplog):
+    """(name, address, zone) of each name that the source skipped."""
+    pattern = re.compile(r"Skipping the name (.+) of (\S+) in zone (\S+): ")
+    return [
+        (ast.literal_eval(match[1]), match[2], match[3])
+        for message in source_warnings(caplog)
+        if (match := pattern.match(message))
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "skipped"),
+    [
+        (
+            "free-text",
+            [
+                ("see wiki.free-text.example.", "192.0.17.3", "free-text.example."),
+                ("reserved for new printer.", "192.0.17.2", "17.0.192.in-addr.arpa."),
+            ],
+        ),
+        (
+            "dns-name-unusable",
+            [
+                ("gateway.", "192.0.18.2", "18.0.192.in-addr.arpa."),
+                ("*.", "192.0.18.3", "18.0.192.in-addr.arpa."),
+                (
+                    "*.dns-name-unusable.example.",
+                    "192.0.18.4",
+                    "18.0.192.in-addr.arpa.",
+                ),
+            ],
+        ),
+    ],
+)
+def test_populate_skips_a_name_that_octodns_rejects_with_a_warning(
+    caplog, name, skipped
+):
+    # octoDNS rejects the record name "see wiki", and the PTR values of free
+    # text, of a name with one label, and of a wildcard. The other names and
+    # addresses keep their records, as tests/live/expected/<name>/ shows.
+    case = load_case(name)
+    source = connect(case)
+    for zone_name in case["zones"]:
+        populate(source, case, zone_name)
+    assert skipped_names(caplog) == skipped
+
+
+@pytest.mark.parametrize("lenient", [False, True])
+def test_populate_skips_a_name_with_an_empty_label_with_a_warning(caplog, lenient):
+    # octoDNS would make .leading-dot.example. the apex, next to the apex of
+    # leading-dot.example, and accepts .www as a record name. IDNA turns the
+    # full-width dot of www． into ".".
+    case = load_case("empty-label")
+    source = connect(case)
+    forward = populate(source, case, "leading-dot.example.", lenient=lenient)
+    assert {(r.name, tuple(r.values)) for r in forward.records} == {
+        ("", ("192.0.19.2",)),
+        ("www", ("192.0.19.3",)),
+    }
+    assert skipped_names(caplog) == [
+        (name, address, "leading-dot.example.")
+        for name, address in [
+            (".leading-dot.example.", "192.0.19.1"),
+            (".www.leading-dot.example.", "192.0.19.3"),
+            ("a..leading-dot.example.", "192.0.19.4"),
+            ("www．.leading-dot.example.", "192.0.19.5"),
+        ]
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "skipped"),
+    [
+        (
+            "first-usable-ptr",
+            [
+                ("printer.", "192.0.22.1"),
+                ("a\u200db.first-usable.example.", "192.0.22.2"),
+                (".host-3.first-usable.example.", "192.0.22.3"),
+            ],
+        ),
+        (
+            "first-usable-ptr-multivalue",
+            [
+                ("printer.", "192.0.22.1"),
+                ("a\u200db.first-usable.example.", "192.0.22.2"),
+                (".host-3.first-usable.example.", "192.0.22.3"),
+                ("see wiki.", "192.0.22.3"),
+            ],
+        ),
+    ],
+)
+def test_populate_gives_a_ptr_record_the_first_name_the_source_can_use(
+    caplog, name, skipped
+):
+    # With multivalue_ptr: false, a name that the source skips is not the
+    # first name, and the source checks no name after the first that it can
+    # use. tests/live/expected/<name>/ holds the PTR records.
+    case = load_case(name)
+    populate(connect(case), case, "22.0.192.in-addr.arpa.")
+    assert skipped_names(caplog) == [
+        (fqdn, address, "22.0.192.in-addr.arpa.") for fqdn, address in skipped
+    ]
+
+
+def test_populate_keeps_a_name_that_octodns_rejects_when_lenient(caplog):
+    # A lenient octoDNS keeps a record that fails its validation, and logs
+    # why. The source keeps the name as well.
+    case = load_case("free-text")
+    source = connect(case)
+    forward = populate(source, case, "free-text.example.", lenient=True)
+    reverse = populate(source, case, "17.0.192.in-addr.arpa.", lenient=True)
+    assert {(r.name, tuple(r.values)) for r in forward.records} == {
+        ("host", ("192.0.17.1", "192.0.17.3")),
+        ("see wiki", ("192.0.17.3",)),
+    }
+    assert {(r.name, tuple(r.values)) for r in reverse.records} == {
+        ("1", ("host.free-text.example.",)),
+        ("2", ("reserved for new printer.",)),
+        ("3", ("host.free-text.example.",)),
+    }
+    assert skipped_names(caplog) == []
+
+
+def octodns_raises_idna_error(zone_name, name):
+    """Whether octoDNS raises IdnaError for an A record with the name.
+
+    octoDNS 1.10 to 1.12 decode the whole FQDN of a record for the message of
+    a validation error, also when lenient, and later releases decode each
+    label. Whether IDNA rejects a long name depends on the idna release.
+    """
+    zone = Zone(zone_name, [])
+    relative = name.removesuffix(f".{zone.name.rstrip('.')}")
+    data = {"type": "A", "ttl": 60, "value": "203.0.113.4"}
+    with pytest.raises((IdnaError, RecordValidationError)) as raised:
+        Record.new(zone, relative, data)
+    return raised.type is IdnaError
+
+
+@pytest.mark.parametrize("lenient", [False, True])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "bad name.xn--caf-dma.example",
+        ".".join(["a" * 60, "b" * 60, "c" * 60, "d" * 52, "xn--caf-dma.example"]),
+    ],
+    ids=["space", "too-long"],
+)
+def test_populate_keeps_the_other_records_when_octodns_cannot_decode_a_name(
+    caplog, name, lenient
+):
+    # octoDNS rejects the space, and a name of more than 253 characters. In
+    # zone café.example., octoDNS 1.10 to 1.12 can raise IdnaError in place of
+    # the validation error, and the source then skips the name in both modes.
+    case = load_case("idn")
+    zone_name = "café.example."
+    (exchange,) = case["zones"][zone_name]["exchanges"]
+    # 203.0.113.4 gets no record for its recorded name a\u200db.<zone> either.
+    (row,) = [
+        ip
+        for ip in exchange["response"]["json"]["results"]
+        if ip["address"] == "203.0.113.4/24"
+    ]
+    row["description"] = name
+    zone = populate(connect(case), case, zone_name, lenient=lenient)
+    records = {(r.fqdn, tuple(r.values)) for r in zone.records}
+    expected = expected_zone("idn", zone_name, []).records
+    others = {(r.fqdn, tuple(r.values)) for r in expected}
+    if lenient and not octodns_raises_idna_error(zone_name, name):
+        # A lenient octoDNS keeps the record, and so does the source.
+        assert records == others | {(f"{name}.", ("203.0.113.4",))}
+        assert skipped_names(caplog) == []
+    else:
+        assert records == others
+        assert skipped_names(caplog) == [
+            (f"{name}.", "203.0.113.4", "xn--caf-dma.example.")
+        ]
+
+
+def test_populate_fails_on_an_ipv6_zone_label_that_is_not_one_hex_digit():
+    # The autouse mocker fails any request, so this also shows that the source
+    # stops before it asks NetBox anything.
+    source = NetboxSource("netbox", url="http://netbox.example.com", token="t")
+    with pytest.raises(ValueError, match="'00' must be one hex digit"):
+        source.populate(Zone("00.ip6.arpa.", []))
+
+
+@pytest.mark.parametrize("zone_name", ["in-addr.arpa.", "ip6.arpa."])
+def test_populate_fails_on_a_reverse_zone_with_no_address_labels(zone_name):
+    # As above, the source stops before it asks NetBox anything.
+    source = NetboxSource("netbox", **SETTINGS)
+    with pytest.raises(ValueError, match="has no address labels"):
+        source.populate(Zone(zone_name, []))

@@ -1,0 +1,205 @@
+{
+  "source": {
+    "url": "http://netbox.example.com"
+  },
+  "init": [],
+  "zones": {
+    "vrf-dup.example.": {
+      "sub_zones": [],
+      "exchanges": [
+        {
+          "request": {
+            "method": "GET",
+            "url": "http://netbox.example.com/api/ipam/ip-addresses/?description__ic=vrf-dup.example&limit=0"
+          },
+          "response": {
+            "status": 200,
+            "json": {
+              "count": 5,
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": 83,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/83/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/83/",
+                  "display": "192.0.16.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.16.1/24",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host.vrf-dup.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 84,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/84/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/84/",
+                  "display": "192.0.16.1/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.16.1/24",
+                  "vrf": {
+                    "id": 2,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/2/",
+                    "display": "anycast",
+                    "name": "anycast",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host.vrf-dup.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 85,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/85/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/85/",
+                  "display": "192.0.16.2/24",
+                  "family": {
+                    "value": 4,
+                    "label": "IPv4"
+                  },
+                  "address": "192.0.16.2/24",
+                  "vrf": {
+                    "id": 2,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/2/",
+                    "display": "anycast",
+                    "name": "anycast",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host.vrf-dup.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 86,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/86/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/86/",
+                  "display": "2001:db8:16::1/64",
+                  "family": {
+                    "value": 6,
+                    "label": "IPv6"
+                  },
+                  "address": "2001:db8:16::1/64",
+                  "vrf": null,
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host.vrf-dup.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                },
+                {
+                  "id": 87,
+                  "url": "http://netbox.example.com/api/ipam/ip-addresses/87/",
+                  "display_url": "http://netbox.example.com/ipam/ip-addresses/87/",
+                  "display": "2001:db8:16::1/64",
+                  "family": {
+                    "value": 6,
+                    "label": "IPv6"
+                  },
+                  "address": "2001:db8:16::1/64",
+                  "vrf": {
+                    "id": 2,
+                    "url": "http://netbox.example.com/api/ipam/vrfs/2/",
+                    "display": "anycast",
+                    "name": "anycast",
+                    "rd": null,
+                    "description": ""
+                  },
+                  "tenant": null,
+                  "status": {
+                    "value": "active",
+                    "label": "Active"
+                  },
+                  "role": null,
+                  "assigned_object_type": null,
+                  "assigned_object_id": null,
+                  "assigned_object": null,
+                  "nat_inside": null,
+                  "nat_outside": [],
+                  "dns_name": "",
+                  "description": "host.vrf-dup.example",
+                  "owner": null,
+                  "comments": "",
+                  "tags": [],
+                  "custom_fields": {},
+                  "created": "2000-01-01T00:00:00.000000Z",
+                  "last_updated": "2000-01-01T00:00:00.000000Z"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,9 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  value: one.names.example.
+'2':
+  ttl: 60
+  type: PTR
+  value: three.names.example.

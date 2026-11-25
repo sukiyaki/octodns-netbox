@@ -1,0 +1,13 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  value: xn--hst-sna.xn--caf-dma.example.
+'2':
+  ttl: 60
+  type: PTR
+  value: xn--hst-sna.xn--caf-dma.example.
+'3':
+  ttl: 60
+  type: PTR
+  value: ok.xn--caf-dma.example.

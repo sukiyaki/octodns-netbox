@@ -1,0 +1,13 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  values:
+  - one.names.example.
+  - two.names.example.
+'2':
+  ttl: 60
+  type: PTR
+  values:
+  - four.names.example.
+  - three.names.example.

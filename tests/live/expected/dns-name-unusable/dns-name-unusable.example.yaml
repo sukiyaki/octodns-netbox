@@ -1,0 +1,9 @@
+---
+'*':
+  ttl: 60
+  type: A
+  value: 192.0.18.4
+host:
+  ttl: 60
+  type: A
+  value: 192.0.18.1

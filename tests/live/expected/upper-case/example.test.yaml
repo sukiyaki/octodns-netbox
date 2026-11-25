@@ -1,0 +1,9 @@
+---
+host1:
+  ttl: 60
+  type: A
+  value: 198.51.100.1
+host2:
+  ttl: 60
+  type: A
+  value: 198.51.100.2

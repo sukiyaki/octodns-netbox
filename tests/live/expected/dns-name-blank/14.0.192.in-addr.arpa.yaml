@@ -1,0 +1,5 @@
+---
+'2':
+  ttl: 60
+  type: PTR
+  value: named.blank-field.example.

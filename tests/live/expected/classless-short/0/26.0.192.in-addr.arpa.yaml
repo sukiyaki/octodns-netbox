@@ -1,0 +1,9 @@
+---
+'5':
+  ttl: 60
+  type: PTR
+  value: host-192-0-0-5.example.
+'6':
+  ttl: 60
+  type: PTR
+  value: host-192-0-0-6.example.

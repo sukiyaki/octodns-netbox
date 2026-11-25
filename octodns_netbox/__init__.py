@@ -7,461 +7,566 @@ based on a NetBox API.
 
 import logging
 import re
-import typing
-from ipaddress import ip_interface
-
-from typing import Annotated, Literal
+from collections import defaultdict
+from collections.abc import Iterable, Iterator
+from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_interface
+from typing import Any, Literal, NamedTuple, Self, cast
 
 import pynetbox
 import requests
-from octodns.record import Record, Rr
+from octodns.idna import IdnaError, idna_encode
+from octodns.record import Record
+from octodns.record.exception import ValidationError as InvalidRecord
 from octodns.source.base import BaseSource
-from octodns.zone import SubzoneRecordException, Zone
+from octodns.zone import Zone
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
-    BeforeValidator,
     ConfigDict,
-    Field,
+    ModelWrapValidatorHandler,
+    NonNegativeInt,
     TypeAdapter,
+    ValidationError,
     ValidationInfo,
     field_validator,
+    model_validator,
 )
+from pydantic_core import InitErrorDetails
 
-import octodns_netbox.reversename
+from octodns_netbox import reversename
 
-# Type alias for URL validation
-Url = Annotated[
-    str,
-    BeforeValidator(lambda value: str(TypeAdapter(AnyHttpUrl).validate_python(value))),
-]
+try:
+    from octodns.record import Rrset
+except ImportError:  # pragma: no-cover-with-rrset
+    # octoDNS before 1.22 has no Rrset. Its Rr holds one value.
+    from octodns.record import Rr
+
+    def _octodns_records(
+        zone: Zone, rdatas: dict[tuple[str, str], list[str]], ttl: int, lenient: bool
+    ) -> list[Any]:
+        rrs = [
+            Rr(owner, _type, ttl, rdata)
+            for (owner, _type), values in rdatas.items()
+            for rdata in values
+        ]
+        return cast(list[Any], Record.from_rrs(zone, rrs, lenient=lenient))
+
+else:  # pragma: no-cover-without-rrset
+
+    def _octodns_records(
+        zone: Zone, rdatas: dict[tuple[str, str], list[str]], ttl: int, lenient: bool
+    ) -> list[Any]:
+        rrsets = [
+            Rrset(owner, _type, ttl, values)
+            for (owner, _type), values in rdatas.items()
+        ]
+        return cast(list[Any], Record.from_rrsets(zone, rrsets, lenient=lenient))
+
+
+# The IP addresses a source reads: those in every VRF (None), those without
+# a VRF, which NetBox calls the Global VRF ("global"), or those in the VRF
+# with this ID.
+VrfFilter = int | Literal["global"] | None
+
+
+class _Session(requests.Session):
+    """A session that takes only proxies and a CA bundle from the environment.
+
+    requests also reads ~/.netrc, or the file in NETRC, for a request without
+    auth, and again on a redirect. It then sends a login from that file as a
+    Basic auth header in place of the token that pynetbox sets, and NetBox
+    answers 403.
+
+    For a request without a verify argument, which is every request that
+    pynetbox sends, requests takes the CA bundle in REQUESTS_CA_BUNDLE or
+    CURL_CA_BUNDLE over Session.verify. ssl_verify: false would then still
+    verify the certificate against that bundle.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        # requests reads netrc only for a request without auth. This auth
+        # leaves the request as pynetbox made it.
+        self.auth = lambda request: request
+
+    def rebuild_auth(self, prepared_request: Any, response: Any) -> None:
+        """Drop the token on a redirect to another host, as requests does.
+
+        requests then reads netrc for the new URL, and this method does not.
+        """
+        if self.should_strip_auth(response.request.url, prepared_request.url):
+            prepared_request.headers.pop("Authorization", None)
+
+    def merge_environment_settings(
+        self, url: Any, proxies: Any, stream: Any, verify: Any, cert: Any
+    ) -> dict[str, Any]:
+        if verify is None:
+            verify = self.verify
+        return super().merge_environment_settings(url, proxies, stream, verify, cert)
+
+
+class ResourceRecord(NamedTuple):
+    """One value of a record. The source groups them by owner and type."""
+
+    owner: str  # FQDN. octoDNS makes it relative to the zone.
+    type: str
+    rdata: str
 
 
 class NetboxSourceConfig(BaseModel):
-    """Configuration model for the NetboxSource."""
+    """The settings of a NetboxSource in the octoDNS config.
 
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+    Unknown keys are dropped. NetboxSource logs a warning for each one.
+    A ValidationError names each key that failed, and holds no value.
+    """
 
-    multivalue_ptr: bool = False
-    SUPPORTS_MULTIVALUE_PTR_: bool = Field(
-        default_factory=lambda: False,
-        alias="SUPPORTS_MULTIVALUE_PTR",
-        description="Whether multiple PTR records are supported.",
-    )
-    SUPPORTS_DYNAMIC_: bool = Field(
-        False,
-        alias="SUPPORTS_DYNAMIC",
-        description="Whether dynamic records are supported.",
-    )
-    SUPPORTS_GEO: bool = False
-    SUPPORTS: typing.Set[str] = set(("A", "AAAA", "PTR"))
+    # Keeps the input out of str() and repr() of a ValidationError.
+    model_config = ConfigDict(frozen=True, extra="ignore", hide_input_in_errors=True)
 
-    id: str
-    url: Url
+    url: str
     token: str
     field_name: str = "description"
-    populate_tags: typing.List[str] = []
-    populate_vrf_id: Annotated[
-        typing.Union[int, Literal["null"], None], Field(validate_default=True)
-    ] = None
-    populate_vrf_name: Annotated[typing.Optional[str], Field(validate_default=True)] = (
-        None
-    )
+    populate_tags: list[str] = []
+    # "null" is the Global VRF, like 0.
+    populate_vrf_id: int | Literal["null"] | None = None
+    populate_vrf_name: str | None = None
     populate_subdomains: bool = True
-    ttl: int = 60
+    multivalue_ptr: bool = False
+    ttl: NonNegativeInt = 60
     ssl_verify: bool = True
-    log: logging.Logger
 
-    @field_validator("url")
-    def remove_trailing_api(cls, v: str) -> str:
+    @field_validator("url", mode="before")
+    @classmethod
+    def http_url_without_api(cls, value: Any) -> str:
+        """pynetbox adds /api to the URL, so a trailing /api or /api/ is dropped.
+
+        requests sends a user name or password in the URL as a Basic auth
+        header in place of the token, so such a URL cannot work.
         """
-        Removes any trailing '/api' or '/api/' from the URL.
+        url = TypeAdapter(AnyHttpUrl).validate_python(value)
+        if url.username or url.password:
+            raise ValueError("Remove the user name and password from the URL.")
+        return re.sub(r"/api/?$", "", str(url))
 
-        Args:
-            v (str): The URL to be validated.
+    @field_validator("token", mode="before")
+    @classmethod
+    def token_as_written(cls, value: Any) -> Any:
+        """An int is a token of digits that octoDNS read from env/.
 
-        Returns:
-            str: A sanitized URL without trailing '/api'.
+        octoDNS drops the zeros at the start of the digits. A v1 token has 40
+        characters, so 40 digits give the token back.
         """
-        if re.search(r"/api/?$", v):
-            v = re.sub(r"/api/?$", "", v)
-        return v
+        if type(value) is int:
+            return f"{value:040d}"
+        return value
+
+    @field_validator("token")
+    @classmethod
+    def token_without_whitespace(cls, value: str) -> str:
+        """Remove the whitespace around the token.
+
+        A Kubernetes Secret often ends in a line break, and a .env file with
+        CRLF line ends leaves a carriage return. requests and http.client
+        refuse such a header, with an error that holds the whole token.
+        A NetBox token is ASCII. http.client sends a header in Latin-1, and its
+        UnicodeEncodeError for a character outside Latin-1 holds the whole
+        header too.
+        """
+        token = value.strip()
+        if " " in token or not token.isprintable() or not token.isascii():
+            raise ValueError(
+                "The token holds whitespace, or a character that is not printable "
+                "or not ASCII."
+            )
+        return token
+
+    @field_validator("populate_vrf_id", "ttl", mode="before")
+    @classmethod
+    def number_not_bool(cls, value: Any) -> Any:
+        """pydantic takes a bool as an int, so true would be 1."""
+        if isinstance(value, bool):
+            raise ValueError("Write a number, not true or false.")
+        return value
 
     @field_validator("populate_vrf_name")
-    def validate_vrf_name(
-        cls, v: typing.Optional[str], info: ValidationInfo
-    ) -> typing.Optional[str]:
-        """
-        Ensures that populate_vrf_name and populate_vrf_id
-        are not set simultaneously.
-
-        Args:
-            v (Optional[str]): The VRF name to validate.
-            info (ValidationInfo): Contains context about the overall model.
-
-        Returns:
-            Optional[str]: The validated VRF name.
-
-        Raises:
-            ValueError: If both populate_vrf_id and populate_vrf_name are set.
-        """
-        data = info.data
-        if v is not None and data.get("populate_vrf_id") is not None:
+    @classmethod
+    def validate_one_vrf(cls, value: str | None, info: ValidationInfo) -> str | None:
+        if value is not None and info.data.get("populate_vrf_id") is not None:
             raise ValueError("Do not set both populate_vrf_id and populate_vrf_name.")
-        return v
+        return value
 
+    @field_validator("populate_vrf_name")
+    @classmethod
+    def vrf_name_not_blank(cls, value: str | None) -> str | None:
+        """NetBox ignores a blank name filter, and returns every VRF."""
+        if value is not None and not value.strip():
+            raise ValueError("Write the name of a VRF.")
+        return value
 
-class NetboxSource(BaseSource, NetboxSourceConfig):
-    """
-    NetboxSource class for octoDNS.
+    @model_validator(mode="wrap")
+    @classmethod
+    def drop_input_from_errors(
+        cls, data: Any, handler: ModelWrapValidatorHandler[Self]
+    ) -> Self:
+        """Replace the input of each error, which can hold the token, with None.
 
-    This source fetches IP address data from NetBox based on certain filters
-    (VRF, tags, etc.) and automatically creates A/AAAA and corresponding PTR
-    records in octoDNS.
-    """
-
-    def __init__(self, id: str, **kwargs: typing.Any):
-        """
-        Initializes the NetboxSource by combining BaseSource and NetboxSourceConfig.
-
-        Args:
-            id (str): The unique identifier for this source.
-            **kwargs (dict): Additional keyword arguments to configure the source.
-        """
-        # Set the mandatory 'id' and a dedicated logger
-        kwargs["id"] = id
-        kwargs["log"] = logging.getLogger(f"{self.__class__.__name__}[{id}]")
-
-        # Initialize the configuration model (NetboxSourceConfig)
-        NetboxSourceConfig.__init__(self, **kwargs)
-
-        # Initialize the octoDNS BaseSource
-        BaseSource.__init__(self, id)
-
-        self.log.debug(
-            f"Initializing NetboxSource: id={id}, url={self.url}, "
-            f"ttl={self.ttl}, ssl_verify={self.ssl_verify}"
-        )
-
-        # Initialize NetBox client
-        self._nb_client = pynetbox.api(url=self.url, token=self.token)
-        session = requests.Session()
-        session.verify = self.ssl_verify
-        self._nb_client.http_session = session
-
-        # Initialize VRF settings (if specified)
-        self._init_vrf()
-
-    def _init_vrf(self) -> None:
-        """
-        Retrieves the VRF ID from NetBox if 'populate_vrf_name' is set,
-        or handles the special "Global"/ID=0 case.
-        """
-        if self._is_global_vrf():
-            self.populate_vrf_id = "null"
-            return
-
-        if self.populate_vrf_name is not None:
-            self._set_vrf_id_from_name()
-
-    def _is_global_vrf(self) -> bool:
-        """
-        Determines if the user explicitly wants the 'Global' VRF or has ID=0.
-        Interprets this as "null" in NetBox.
-
-        Returns:
-            bool: True if the VRF should be treated as global/null, False otherwise.
-        """
-        return self.populate_vrf_name == "Global" or self.populate_vrf_id == 0
-
-    def _set_vrf_id_from_name(self) -> None:
-        """
-        Retrieves the VRF from NetBox by name and sets the 'populate_vrf_id'.
-        Raises a ValueError if the VRF cannot be found.
-
-        Raises:
-            ValueError: If VRF name is invalid or not found in NetBox.
+        hide_input_in_errors does not reach error.json() or error.errors(), and
+        the input of a missing key is every setting.
         """
         try:
-            vrf_obj = self._nb_client.ipam.vrfs.get(name=self.populate_vrf_name)
-            if vrf_obj is None:
-                raise ValueError(
-                    f"VRF '{self.populate_vrf_name}' not found. "
-                    "Use a valid name or VRF ID."
+            return handler(data)
+        except ValidationError as error:
+            lines = []
+            for line in error.errors():
+                details = InitErrorDetails(
+                    type=line["type"], loc=line["loc"], input=None
                 )
-            self.populate_vrf_id = vrf_obj.id
+                if "ctx" in line:
+                    details["ctx"] = line["ctx"]
+                lines.append(details)
+            raise ValidationError.from_exception_data(error.title, lines) from None
+
+
+# octoDNS has no type information, so BaseSource is Any to mypy.
+class NetboxSource(BaseSource):  # type: ignore[misc]
+    """Creates A, AAAA, and PTR records from the IP addresses in NetBox."""
+
+    SUPPORTS_GEO = False
+    SUPPORTS = frozenset({"A", "AAAA", "PTR"})
+
+    def __init__(self, id: str, /, **settings: Any):
+        self.log = logging.getLogger(f"{self.__class__.__name__}[{id}]")
+        self.config = NetboxSourceConfig(**settings)
+        super().__init__(id)
+        for key in settings:
+            if key not in NetboxSourceConfig.model_fields:
+                self.log.warning("Unknown setting %s has no effect.", key)
+
+        self.log.debug(
+            "Initializing NetboxSource: id=%s, ttl=%s, ssl_verify=%s",
+            id,
+            self.config.ttl,
+            self.config.ssl_verify,
+        )
+
+        self._nb_client = pynetbox.api(url=self.config.url, token=self.config.token)
+        session = _Session()
+        session.verify = self.config.ssl_verify
+        self._nb_client.http_session = session
+
+        self._vrf = self._resolve_vrf()
+
+    def _resolve_vrf(self) -> VrfFilter:
+        name, vrf_id = self.config.populate_vrf_name, self.config.populate_vrf_id
+        if name == "Global" or vrf_id == 0 or vrf_id == "null":
+            return "global"
+        if name is None:
+            return vrf_id
+        try:
+            vrf_obj = self._nb_client.ipam.vrfs.get(name=name)
+            if vrf_obj is None:
+                raise ValueError(f"VRF '{name}' not found. Use a valid name or VRF ID.")
+            return cast(int, vrf_obj.id)
         except (ValueError, AttributeError) as exc:
             raise ValueError(
-                f"Failed to retrieve VRF information by name '{self.populate_vrf_name}'. "
+                f"Failed to retrieve VRF information by name '{name}'. "
                 "Use a valid populate_vrf_id instead."
             ) from exc
 
-    def populate(self, zone: Zone, target: bool = False, lenient: bool = False) -> None:
-        """
-        Populates the given zone with records from NetBox.
+    def _ip_addresses(self, filters: dict[str, Any]) -> Iterable[Any]:
+        vrf: dict[str, int | str] = {}
+        if self._vrf == "global":
+            # NetBox reads vrf_id=null as "no VRF".
+            vrf = {"vrf_id": "null"}
+        elif self._vrf is not None:
+            vrf = {"vrf_id": self._vrf}
+        return cast(
+            Iterable[Any],
+            self._nb_client.ipam.ip_addresses.filter(
+                **filters, **vrf, tag=self.config.populate_tags
+            ),
+        )
 
-        Args:
-            zone (Zone): The octoDNS zone object to populate.
-            target (bool, optional): Unused in this implementation. Defaults to False.
-            lenient (bool, optional): If True, allows more permissive record handling.
-                                      Defaults to False.
-        """
+    def populate(self, zone: Zone, target: bool = False, lenient: bool = False) -> None:
         self.log.debug(
-            f"populate called for zone={zone.name}, target={target}, lenient={lenient}"
+            "populate called for zone=%s, target=%s, lenient=%s",
+            zone.name,
+            target,
+            lenient,
         )
         before = len(zone.records)
-
-        # Decide whether this is a reverse zone (PTR) or forward zone (A/AAAA)
-        if zone.name.endswith(".in-addr.arpa."):
-            # IPv4 reverse zone
-            records = self._populate_ptr_records(zone, family=4)
-        elif zone.name.endswith(".ip6.arpa."):
-            # IPv6 reverse zone
-            records = self._populate_ptr_records(zone, family=6)
+        if reversename.is_reverse(zone):
+            rrs = self._ptr_records(zone, lenient)
         else:
-            # Forward zone (A/AAAA)
-            records = self._populate_forward_records(zone)
+            rrs = self._forward_records(zone, lenient)
 
-        self._add_records_to_zone(zone, records, lenient)
+        # Two NetBox IP addresses can give a record the same value, such as one
+        # address and name in two VRFs. octoDNS keeps a value it gets twice,
+        # and a provider holds it once, so each sync would plan an update.
+        rdatas: dict[tuple[str, str], list[str]] = defaultdict(list)
+        for rr in rrs:
+            values = rdatas[(rr.owner, rr.type)]
+            if rr.rdata not in values:
+                values.append(rr.rdata)
+        for record in _octodns_records(zone, rdatas, self.config.ttl, lenient):
+            zone.add_record(record, lenient=lenient)
         self.log.info(
             "Populated %s new records in zone %s", len(zone.records) - before, zone.name
         )
 
-    def _populate_ptr_records(
-        self, zone: Zone, family: Literal[4, 6]
-    ) -> typing.List[Rr]:
-        """
-        Populates PTR records for a reverse zone (in-addr.arpa or ip6.arpa).
-
-        Args:
-            zone (Zone): The reverse zone to populate.
-            family (Literal[4, 6]): IP family (4 for IPv4, 6 for IPv6).
-
-        Returns:
-            List[Rr]: A list of Rr objects for PTR records.
-        """
-        network = octodns_netbox.reversename.to_network(zone)
-        filter_kwargs = self._build_ptr_filter_kwargs(network, family)
-
-        ipam_records = self._nb_client.ipam.ip_addresses.filter(**filter_kwargs)
-        return self._build_ptr_records(zone, ipam_records)
-
-    def _build_ptr_filter_kwargs(
-        self, network: typing.Any, family: Literal[4, 6]
-    ) -> dict[str, typing.Any]:
-        """
-        Builds the filter kwargs for NetBox queries when populating PTR records.
-
-        Args:
-            network (Any): The IP network derived from the reverse zone.
-            family (Literal[4, 6]): The IP family (4 or 6).
-
-        Returns:
-            dict[str, Any]: A dictionary of filter criteria for NetBox.
-        """
-        filter_kwargs = {
-            f"{self.field_name}__empty": "false",
-            "parent": network.compressed,
-            "family": family,
-            "vrf_id": self.populate_vrf_id,
-            "tag": self.populate_tags,
-        }
-
-        # https://github.com/netbox-community/pynetbox/pull/545
-        # From pynetbox v7.4.0, None will be mapped to null.
-        # When vrf_id is null, it does not mean that it is not filtered by vrf_id,
-        # but it would be an intention that VRF is not set.
-        if filter_kwargs["vrf_id"] is None:
-            del filter_kwargs["vrf_id"]
-
-        return filter_kwargs
-
-    def _build_ptr_records(
-        self,
-        zone: Zone,
-        ipam_records: typing.Iterable[typing.Any],
-    ) -> typing.List[Rr]:
-        """
-        Builds PTR Rr objects from NetBox IPAM records.
-
-        Args:
-            zone (Zone): The reverse zone being populated.
-            ipam_records (Iterable[Any]): IPAM records returned by NetBox filter query.
-
-        Returns:
-            List[Rr]: A list of PTR record objects to be added to the zone.
-        """
-        records: typing.List[Rr] = []
+    def _ptr_records(self, zone: Zone, lenient: bool) -> list[ResourceRecord]:
+        field_name = self.config.field_name
+        network = reversename.to_network(zone)
+        sub_zone_networks = _sub_zone_networks(zone)
+        ipam_records = self._ip_addresses(
+            {
+                f"{field_name}__empty": "false",
+                "parent": network.compressed,
+                "family": network.version,
+            }
+        )
+        records: list[ResourceRecord] = []
+        in_sub_zones: dict[tuple[str, str], str] = {}
+        # The VRF, as (ID, name), and the first value of each NetBox IP
+        # address that gave a value, by PTR name and address.
+        sources: dict[
+            tuple[str, IPv4Address | IPv6Address],
+            list[tuple[tuple[int | None, str], str]],
+        ]
+        sources = defaultdict(list)
         for ipam_record in ipam_records:
             ip_address = ip_interface(ipam_record.address).ip
-            ptr_name = zone.hostname_from_fqdn(
-                octodns_netbox.reversename.from_address(zone, ip_address)
+            ptr_name = reversename.from_address(zone, ip_address)
+            sub_zone = _sub_zone(zone, ptr_name) or next(
+                (fqdn for fqdn, net in sub_zone_networks if ip_address in net), None
             )
-            # Potentially multiple FQDNs in the designated field
-            fqdns = self._parse_fqdns_list(
-                ipam_record[self.field_name],
-                len_limit=None if self.multivalue_ptr else 1,
-            )
-            for fqdn in fqdns:
-                rr = Rr(ptr_name, "PTR", self.ttl, fqdn)
-                self.log.debug(f"Adding PTR record {rr} to zone {zone.name}")
-                records.append(rr)
-        return records
-
-    def _populate_forward_records(self, zone: Zone) -> typing.List[Rr]:
-        """
-        Populates A/AAAA records for a forward zone.
-
-        Args:
-            zone (Zone): The forward zone to populate.
-
-        Returns:
-            List[Rr]: A list of Rr objects for A/AAAA records.
-        """
-        filter_kwargs = self._build_forward_filter_kwargs(zone)
-        ipam_records = self._nb_client.ipam.ip_addresses.filter(**filter_kwargs)
-
-        return self._build_forward_records(zone, ipam_records)
-
-    def _build_forward_filter_kwargs(self, zone: Zone) -> dict[str, typing.Any]:
-        """
-        Builds the filter kwargs for NetBox queries when populating forward A/AAAA records.
-
-        Args:
-            zone (Zone): The forward zone for which to build query filters.
-
-        Returns:
-            dict[str, Any]: A dictionary of filter criteria for NetBox queries.
-        """
-        zone_name_no_dot = zone.name.rstrip(".")
-        filter_kwargs = {
-            f"{self.field_name}__ic": zone_name_no_dot,
-            "vrf_id": self.populate_vrf_id,
-            "tag": self.populate_tags,
-        }
-        if filter_kwargs["vrf_id"] is None:
-            del filter_kwargs["vrf_id"]
-        return filter_kwargs
-
-    def _build_forward_records(
-        self, zone: Zone, ipam_records: typing.Iterable[typing.Any]
-    ) -> typing.List[Rr]:
-        """
-        Creates A/AAAA Rr objects from NetBox IP address records for the given zone.
-
-        Args:
-            zone (Zone): The forward zone being populated.
-            ipam_records (Iterable[Any]): IPAM records returned by NetBox filter query.
-
-        Returns:
-            List[Rr]: A list of forward record objects to be added to the zone.
-        """
-        records: typing.List[Rr] = []
-        for ipam_record in ipam_records:
-            # Delegate the per-record processing to a helper method
-            new_records = self._build_records_for_ipam_record(zone, ipam_record)
-            records.extend(new_records)
-
-        return records
-
-    def _build_records_for_ipam_record(
-        self, zone: Zone, ipam_record: typing.Any
-    ) -> typing.List[Rr]:
-        """
-        Converts a single NetBox IPAM record into one or more octoDNS record objects.
-
-        Args:
-            zone (Zone): The forward zone being populated.
-            ipam_record (Any): A single IPAM record from NetBox.
-
-        Returns:
-            List[Rr]: A list of forward (A/AAAA) record objects corresponding
-                    to the provided IPAM record.
-        """
-        records: typing.List[Rr] = []
-
-        # Derive IP address and record type
-        ip_address = ip_interface(ipam_record.address).ip
-        record_type: Literal["A", "AAAA"] = "A" if ip_address.version == 4 else "AAAA"
-
-        # Parse out any FQDNs listed in the desired NetBox field
-        fqdns = self._parse_fqdns_list(ipam_record[self.field_name])
-
-        # For each FQDN, determine if it belongs to this zone and create records
-        for fqdn in fqdns:
-            if not self._fqdn_in_zone(fqdn, zone):
-                self.log.debug(f"Skip: FQDN={fqdn} on zone {zone.name}")
+            if sub_zone:
+                in_sub_zones.setdefault((ptr_name, "PTR"), sub_zone)
                 continue
-
-            name = zone.hostname_from_fqdn(fqdn)
-            rr = Rr(name, record_type, self.ttl, ip_address.compressed)
-            self.log.debug(f"Created {record_type} record {rr} for zone {zone.name}")
-            records.append(rr)
-
+            names = _names(ipam_record[field_name])
+            fqdns = []
+            for fqdn in self._octodns_fqdns(names, ip_address, zone):
+                rr = ResourceRecord(ptr_name, "PTR", fqdn)
+                if not self._usable(rr, ip_address, zone, lenient):
+                    continue
+                self.log.debug("Adding PTR record %s to zone %s", rr, zone.name)
+                records.append(rr)
+                fqdns.append(fqdn)
+                # The first name that the source can use. The names after it
+                # are not converted or checked, so they log no warning.
+                if not self.config.multivalue_ptr:
+                    break
+            if fqdns:
+                nb_vrf = ipam_record.vrf
+                vrf = (nb_vrf.id, nb_vrf.name) if nb_vrf else (None, "Global")
+                sources[(ptr_name, ip_address)].append((vrf, fqdns[0]))
+        self._skip_sub_zone_records(in_sub_zones)
+        if not self.config.multivalue_ptr:
+            for (ptr_name, ip_address), values in sources.items():
+                names_by_vrf: dict[tuple[int | None, str], set[str]]
+                names_by_vrf = defaultdict(set)
+                for vrf, fqdn in values:
+                    names_by_vrf[vrf].add(fqdn)
+                # Reading one VRF gives the PTR one value only when each VRF
+                # gives one name. A VRF that gives two by itself, as anycast
+                # addresses can, keeps two whichever VRF the source reads.
+                one_name_each = all(len(n) == 1 for n in names_by_vrf.values())
+                if one_name_each and len({fqdn for _, fqdn in values}) > 1:
+                    self.log.warning(
+                        "PTR %s gets a value from each of %d NetBox IP addresses "
+                        "for %s, in VRFs %s. Set populate_vrf_id or "
+                        "populate_vrf_name to read one VRF.",
+                        ptr_name,
+                        len(values),
+                        ip_address,
+                        ", ".join(name for _, name in names_by_vrf),
+                    )
         return records
 
-    def _fqdn_in_zone(self, fqdn: str, zone: Zone) -> bool:
+    def _forward_records(self, zone: Zone, lenient: bool) -> list[ResourceRecord]:
+        field_name = self.config.field_name
+        ipam_records = self._ip_addresses({f"{field_name}__ic": zone.name.rstrip(".")})
+        records: list[ResourceRecord] = []
+        in_sub_zones: dict[tuple[str, str], str] = {}
+        for ipam_record in ipam_records:
+            ip_address = ip_interface(ipam_record.address).ip
+            record_type = "A" if ip_address.version == 4 else "AAAA"
+            for name in _names(ipam_record[field_name]):
+                fqdn, unusable = _octodns_name(name)
+                # A configured sub-zone checks the names inside it, so the
+                # source warns about them there and not here.
+                sub_zone = _sub_zone(zone, fqdn)
+                if unusable is not None and sub_zone is None:
+                    self._skip_name(name, ip_address, zone, unusable)
+                    continue
+                if not self._fqdn_in_zone(fqdn, zone):
+                    self.log.debug("Skip: FQDN=%s on zone %s", fqdn, zone.name)
+                    continue
+                if sub_zone:
+                    in_sub_zones.setdefault((fqdn, record_type), sub_zone)
+                    continue
+                rr = ResourceRecord(fqdn, record_type, ip_address.compressed)
+                if not self._usable(rr, ip_address, zone, lenient):
+                    continue
+                self.log.debug(
+                    "Created %s record %s for zone %s", record_type, rr, zone.name
+                )
+                records.append(rr)
+        self._skip_sub_zone_records(in_sub_zones)
+        return records
+
+    def _octodns_fqdns(
+        self, names: list[str], ip_address: IPv4Address | IPv6Address, zone: Zone
+    ) -> Iterator[str]:
+        """The names as octoDNS spells them, one at a time.
+
+        A name that the source cannot use is left out, with a warning.
         """
-        Checks whether a given FQDN belongs in the specified zone.
+        for name in names:
+            fqdn, unusable = _octodns_name(name)
+            if unusable is not None:
+                self._skip_name(name, ip_address, zone, unusable)
+                continue
+            yield fqdn
 
-        1. If FQDN matches the zone's apex (fqdn == zone.name), it's valid.
-        2. If FQDN ends with ".<zone.name>", it's valid. However, if
-           self.populate_subdomains is False, we exclude deeper subdomains.
-        3. Otherwise, it's invalid.
+    def _usable(
+        self,
+        rr: ResourceRecord,
+        ip_address: IPv4Address | IPv6Address,
+        zone: Zone,
+        lenient: bool,
+    ) -> bool:
+        """Whether octoDNS accepts the record of one name of the IP address.
 
-        Args:
-            fqdn (str): The fully qualified domain name to check.
-            zone (Zone): The zone against which to match.
+        The source checks each name on its own, so a name that octoDNS rejects
+        takes no other name or address with it. With lenient, octoDNS keeps a
+        record that fails its validation, and so does the source.
 
-        Returns:
-            bool: True if the FQDN should be included in this zone, False otherwise.
+        octoDNS decodes the record name for its logs, and raises IdnaError,
+        also when lenient, for a name without a Unicode form, such as the
+        invalid A-label xn--bad_label. octoDNS 1.10 to 1.12 decode the whole
+        FQDN for the message of a validation error too, so in a zone such as
+        xn--caf-dma.example. a name that fails validation, such as "bad name",
+        raises IdnaError in place of the error. The source skips such a name
+        in both modes.
         """
-        if fqdn == zone.name:
-            return True
-
-        if fqdn.endswith(f".{zone.name}"):
-            leftover = fqdn[: -len(zone.name)].rstrip(".")
-            # If not populating subdomains, exclude multi-level subdomains
-            if self.populate_subdomains or "." not in leftover:
+        rdatas = {(rr.owner, rr.type): [rr.rdata]}
+        reason: IdnaError | str
+        try:
+            _octodns_records(zone, rdatas, self.config.ttl, lenient=False)
+        except InvalidRecord as error:
+            if lenient:
                 return True
-
+            reason = "; ".join(map(str, error.reasons))
+        except IdnaError as error:
+            reason = error
+        else:
+            return True
+        name = rr.rdata if rr.type == "PTR" else rr.owner
+        self._skip_name(name, ip_address, zone, reason)
         return False
 
-    def _add_records_to_zone(
-        self, zone: Zone, rrs: typing.List[Rr], lenient: bool
+    def _skip_name(
+        self,
+        name: str,
+        ip_address: IPv4Address | IPv6Address,
+        zone: Zone,
+        reason: IdnaError | str,
     ) -> None:
-        """
-        Adds Rr objects to the given zone, respecting lenient mode
-        and subzone exceptions.
+        self.log.warning(
+            "Skipping the name %r of %s in zone %s: %s",
+            name,
+            ip_address,
+            zone.name,
+            reason,
+        )
 
-        Args:
-            zone (Zone): The zone to which records will be added.
-            rrs (List[Rr]): A list of Rr objects.
-            lenient (bool): If True, subzone exceptions will not raise an error.
-        """
-        for record in Record.from_rrs(zone, rrs, lenient=lenient):
-            try:
-                zone.add_record(record, lenient=lenient)
-            except SubzoneRecordException:
-                self.log.warning(f"Skipping subzone record: {record}")
+    def _skip_sub_zone_records(self, in_sub_zones: dict[tuple[str, str], str]) -> None:
+        for (owner, record_type), sub_zone in in_sub_zones.items():
+            self.log.warning(
+                "Skipping subzone record: %s %s, which zone %s holds",
+                owner,
+                record_type,
+                sub_zone,
+            )
 
-    def _parse_fqdns_list(
-        self, field_value: str, len_limit: typing.Optional[int] = None
-    ) -> typing.List[str]:
-        """
-        Parses a string containing one or more comma-separated FQDNs into a list.
-        Ensures each FQDN ends with a trailing period.
+    def _fqdn_in_zone(self, fqdn: str, zone: Zone) -> bool:
+        if fqdn == zone.name:
+            return True
+        if fqdn.endswith(f".{zone.name}"):
+            leftover = fqdn[: -len(zone.name)].rstrip(".")
+            return self.config.populate_subdomains or "." not in leftover
+        return False
 
-        Args:
-            field_value (str): The raw field containing comma-separated FQDNs.
-            len_limit (Optional[int]): If set, limits how many FQDNs to parse.
 
-        Returns:
-            List[str]: A list of sanitized FQDNs, each ending with a period.
-        """
-        fqdns = [
-            fqdn.strip() if fqdn.strip().endswith(".") else f"{fqdn.strip()}."
-            for fqdn in field_value.split(",")
-            if fqdn.strip()
-        ]
-        return fqdns[:len_limit] if len_limit else fqdns
+def _names(field_value: str) -> list[str]:
+    names = (name.strip() for name in field_value.split(","))
+    return [name if name.endswith(".") else f"{name}." for name in names if name]
+
+
+def _octodns_name(name: str) -> tuple[str, IdnaError | str | None]:
+    """The name as octoDNS spells zone and record names, and why it is unusable.
+
+    That is lower case, with each label that is not ASCII in IDNA form:
+    höst.example. becomes xn--hst-sna.example. A label that has no IDNA form
+    stays as it is, so the labels after it still give the zone of the name.
+    Its IdnaError is the reason that the source cannot use the name, and so is
+    an empty label.
+    """
+    # Lower case for the whole name first, as octoDNS does. str.lower() turns
+    # a capital sigma at the end of a label into a small sigma when the next
+    # label starts with a letter, and into a final sigma in a label on its
+    # own. Then label by label, as octoDNS 1.13 and later do. octoDNS 1.10 to
+    # 1.12 convert the whole name, and IDNA rejects the "_" in an ASCII label
+    # such as ex_ample.
+    labels: list[str] = []
+    unusable: IdnaError | str | None = None
+    for label in name.lower().split("."):
+        try:
+            labels.append(idna_encode(label))
+        except IdnaError as error:
+            labels.append(label)
+            if unusable is None:
+                unusable = error
+    fqdn = ".".join(labels)
+    # octoDNS would make .example.com. the zone apex, and accepts .www as a
+    # record name. IDNA turns a full-width dot into ".", so the check comes
+    # after it.
+    if unusable is None and "" in fqdn.split(".")[:-1]:
+        unusable = "empty label"
+    return fqdn, unusable
+
+
+def _sub_zone(zone: Zone, owner: str) -> str | None:
+    """The configured sub-zone that holds the record name, by octoDNS's rule.
+
+    octoDNS raises SubzoneRecordException for such a record, and adds it to
+    the zone when it is lenient. A name outside the zone is in no sub-zone.
+    """
+    name = owner.removesuffix(f".{zone.name}")
+    if name == owner:
+        return None
+    for sub_zone in sorted(zone.sub_zones):
+        if name == sub_zone or name.endswith(f".{sub_zone}"):
+            return f"{sub_zone}.{zone.name}"
+    return None
+
+
+def _sub_zone_networks(zone: Zone) -> list[tuple[str, IPv4Network | IPv6Network]]:
+    """The configured sub-zones of a reverse zone, with their networks.
+
+    A classless zone such as 0-26.2.0.192.in-addr.arpa. holds the PTR records
+    of its addresses under its own name, so octoDNS's rule for names misses
+    them. The parent zone holds the CNAME records that point there (RFC 2317),
+    and gets no PTR record for those addresses. A sub-zone whose name gives no
+    network, such as subnet1.2.0.192.in-addr.arpa., is left to the rule for
+    names.
+    """
+    networks = []
+    for sub_zone in sorted(zone.sub_zones):
+        fqdn = f"{sub_zone}.{zone.name}"
+        try:
+            networks.append((fqdn, reversename.to_network(Zone(fqdn, []))))
+        except ValueError:
+            continue
+    return networks
