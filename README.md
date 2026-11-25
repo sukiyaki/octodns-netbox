@@ -148,6 +148,11 @@ NetBox 4.5 and later v2 API tokens work with every supported pynetbox release, 7
 
 [CONTRIBUTING.md](https://github.com/sukiyaki/octodns-netbox/blob/main/CONTRIBUTING.md) tells you how to set up the project, run the tests, and release a version.
 
+## Security
+
+To report a vulnerability, follow [SECURITY.md](https://github.com/sukiyaki/octodns-netbox/blob/main/SECURITY.md).
+Do not open a public issue for it.
+
 ## License
 
 [MIT](https://github.com/sukiyaki/octodns-netbox/blob/main/LICENSE)

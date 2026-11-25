@@ -7,6 +7,9 @@ For a bug, include these:
 - The versions of octodns-netbox, octoDNS, pynetbox, and NetBox.
 - The records you expected and the records you got.
 
+Do not report a vulnerability in an issue.
+Follow [SECURITY.md](https://github.com/sukiyaki/octodns-netbox/blob/main/SECURITY.md) instead.
+
 ## Set up the project
 
 You need these tools:
