@@ -80,11 +80,10 @@ def test_refuses_the_output_dir_of_a_run_that_has_not_ended(tmp_path, compose):
 
 
 def test_two_runs_that_start_together_cannot_share_an_output_dir(tmp_path, compose):
-    # The second review found both runs passing the checks of the output dir
-    # before either wrote run.json, and the second then removing what the
-    # first had written. Path.mkdir(out) came after those checks. Both runs
-    # wait for each other there, and the second goes on only once the first
-    # has written into the directory.
+    # Two runs start on one output dir at the same moment. Both reach
+    # Path.mkdir(out) before either has claimed the directory, and the second
+    # goes on only once the first has written into it. The second run must
+    # stop at run.lock and leave the files of the first in place.
     (tmp_path / "run.json").write_text('{"result": "matches"}')
     both_ready = threading.Barrier(2, timeout=5)
     first_wrote, second_ended = threading.Event(), threading.Event()
@@ -169,8 +168,7 @@ def test_records_the_result_when_the_run_is_interrupted(tmp_path, compose):
 def test_removes_the_stack_when_saving_its_log_is_interrupted(
     tmp_path, compose, monkeypatch
 ):
-    # The second review: the zones matched, then Ctrl-C came while the run
-    # saved the NetBox log.
+    # The zones matched, then Ctrl-C came while the run saved the NetBox log.
     def matching_run(args, out, stack, run, durations):
         stack.up()
         return 0, "matches"
@@ -188,7 +186,7 @@ def test_removes_the_stack_when_saving_its_log_is_interrupted(
 
 
 def test_an_interrupted_final_write_leaves_run_json_whole(tmp_path, compose):
-    # The third review: Ctrl-C came while the run wrote its final run.json.
+    # Ctrl-C came while the run wrote its final run.json.
     write_text = Path.write_text
 
     def interrupted_final_write(path, text, *args, **kwargs):
