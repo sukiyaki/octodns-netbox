@@ -89,7 +89,8 @@ A run takes about four minutes, most of it while NetBox starts.
 uv run tests/live/run.py --netbox 4.7 --token-version 2
 ```
 
-- `--netbox` takes `4.0` or `4.7`.
+- `--netbox` takes `4.0`, `4.7`, or `latest`.
+  `latest` runs the `netboxcommunity/netbox:latest` image, as the [`netbox-latest` row](#the-netbox-latest-row) does.
 - `--token-version` takes `1` or `2`.
   NetBox 4.0 has only v1 tokens.
 - Each run writes the zones, logs, and differences to a new directory under `tests/live/output/`, such as `tests/live/output/netbox-4.7-token-v2-k3j9x2a1/`, and prints its path.
@@ -115,15 +116,17 @@ The exit status is 0 when the zones and fixtures match, 1 when they differ or a 
 
 On NetBox 4.7, the run also compares the responses it records with `tests/fixtures/`.
 
-The `live` workflow runs these rows on each pull request, every Monday, and on demand:
+The `live` workflow runs these rows, each as the check `live (<row>)`.
+Every row runs when you run the workflow by hand.
 
-| Row | NetBox | Token | Python | Dependencies |
-| --- | --- | --- | --- | --- |
-| `netbox-4.0-token-v1` | 4.0 | v1 | 3.15 | locked |
-| `netbox-4.0-token-v1-lowest` | 4.0 | v1 | 3.11 | lowest direct |
-| `netbox-4.7-token-v1` | 4.7 | v1 | 3.11 | locked |
-| `netbox-4.7-token-v2` | 4.7 | v2 | 3.15 | locked |
-| `netbox-4.7-token-v2-lowest` | 4.7 | v2 | 3.11 | lowest direct |
+| Row | NetBox | Token | Python | Dependencies | Pull requests | Every Monday |
+| --- | --- | --- | --- | --- | --- | --- |
+| `netbox-4.0-token-v1` | 4.0 | v1 | 3.15 | locked | yes | no |
+| `netbox-4.0-token-v1-lowest` | 4.0 | v1 | 3.11 | lowest direct | yes | yes |
+| `netbox-4.7-token-v1` | 4.7 | v1 | 3.11 | locked | yes | no |
+| `netbox-4.7-token-v2` | 4.7 | v2 | 3.15 | locked | yes | no |
+| `netbox-4.7-token-v2-lowest` | 4.7 | v2 | 3.11 | lowest direct | yes | yes |
+| `netbox-latest` | newest release | v2 | 3.15 | locked | no | yes |
 
 The unit tests replay the responses recorded from NetBox 4.7 with each pynetbox release that `uv.lock` resolves, and with pynetbox 7.4.1 in the `lowest` job.
 They check the method, URL, and query string of each request.
@@ -136,6 +139,12 @@ Each row checks one thing that no other row checks:
   It runs on Python 3.11, where `uv.lock` resolves an older pynetbox than on Python 3.15, so each pynetbox release in `uv.lock` meets a real NetBox.
 - `netbox-4.7-token-v2` checks a v2 token sent as `Bearer`, as the pynetbox releases in `uv.lock` send it.
 - `netbox-4.7-token-v2-lowest` checks a v2 token sent as `Token`, as pynetbox 7.4.1 sends it.
+- `netbox-latest` checks the newest NetBox release, as [described below](#the-netbox-latest-row).
+
+The Monday run takes the rows whose inputs can move without a commit.
+The `netbox-latest` image moves to each new NetBox release.
+The lowest rows resolve their dependencies when they run, so their transitive dependencies can move between runs.
+A Monday run of the other rows would reuse the same NetBox image tags and the same `uv.lock`.
 
 ## Change what the source returns
 
@@ -253,6 +262,33 @@ After you approve it, update these on its branch:
 2. The rows in `.github/workflows/live.yml`.
 3. The fixtures, [recorded again](#record-the-fixtures-again) from the new release.
 4. The NetBox row of the support table in `README.md`.
+
+### The netbox-latest row
+
+The `live (netbox-latest)` check runs the `netboxcommunity/netbox:latest` image with a v2 token on Python 3.15.
+[netbox-docker](https://github.com/netbox-community/netbox-docker#container-image-tags) points `latest` at the newest stable NetBox, built with the newest netbox-docker.
+It shows whether a new NetBox release breaks the source, also before Renovate proposes the pinned tag of that release.
+
+The check runs every Monday, with the lowest rows, and when you run the `live` workflow by hand.
+It never runs on a pull request or a push, so a new NetBox release cannot fail a pull request, and no ruleset requires the check.
+It compares the zones with `tests/live/expected/`.
+It does not compare the recording with `tests/fixtures/`, because a new release can add fields to its responses without breaking the source.
+
+GitHub notifies you when a scheduled run fails.
+To find what broke:
+
+1. Find the NetBox version in the line `NetBox <version> is running.` of the job log, or in `run.json` of the `live-netbox-latest` artifact.
+   If NetBox did not start, read its log in `netbox.log` of the artifact.
+2. Read `diff.txt` in the artifact for zones that differ, or `error` in `run.json` for a step that failed.
+3. Run the row on your machine.
+   Docker keeps the `latest` image it pulled before, so pull it first:
+
+   ```sh
+   docker pull netboxcommunity/netbox:latest
+   uv run tests/live/run.py --netbox latest --token-version 2
+   ```
+
+4. Fix the source or the live tests, or open an issue that names the NetBox version.
 
 ## Open a pull request
 

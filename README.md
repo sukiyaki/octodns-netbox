@@ -127,9 +127,12 @@ It assumes that NetBox holds these IP addresses:
 | Python | 3.11 to 3.15 | 3.11, 3.12, 3.13, 3.14, and 3.15 |
 | octoDNS | 1.10 or later, before 2.0 | 1.10.0 and the newest release |
 | pynetbox | 7.4.1 or later, before 8.0 | 7.4.1 and the newest release |
-| NetBox | 4.0 to 4.7 | 4.0 with a v1 token, and 4.7 with v1 and v2 tokens |
+| NetBox | 4.0 to 4.7 | 4.0 with a v1 token, 4.7 with v1 and v2 tokens, and every week the newest release with a v2 token |
 
 The NetBox tests run octoDNS against a real NetBox in Docker.
+Each pull request tests the pinned NetBox releases, each with the locked and the lowest direct dependency versions.
+Every week, CI also tests the `latest` image of netbox-docker, and it tests the lowest dependency versions again, because those inputs can change without a commit.
+A new NetBox release can fail the weekly run before this table lists that release.
 NetBox 4.5 and later v2 API tokens work with every supported pynetbox release, 7.4.1 included.
 
 ## Documentation
