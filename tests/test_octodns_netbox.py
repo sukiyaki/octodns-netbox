@@ -6,16 +6,21 @@ tests/live/cases.py, and tests/live/expected/<case>/ holds the zones the live
 run must dump for it, so the replay and the live run check the same zones.
 """
 
+import ast
 import json
 import logging
+import re
 from contextlib import contextmanager
 from ipaddress import ip_interface
 from pathlib import Path
 
 import pytest
 import requests_mock
+from octodns.idna import IdnaError
 from octodns.manager import Manager
 from octodns.provider.yaml import YamlProvider
+from octodns.record import Record
+from octodns.record.exception import ValidationError as RecordValidationError
 from octodns.zone import Zone
 from pydantic import ValidationError
 
@@ -61,11 +66,11 @@ def connect(case):
         return NetboxSource("netbox", token="not-recorded", **case["source"])
 
 
-def populate(source, case, zone_name):
+def populate(source, case, zone_name, lenient=False):
     recorded = case["zones"][zone_name]
     zone = Zone(zone_name, recorded["sub_zones"])
     with replaying(recorded["exchanges"]):
-        source.populate(zone)
+        source.populate(zone, lenient=lenient)
     return zone
 
 
@@ -651,6 +656,127 @@ def test_populate_skips_a_record_name_octodns_cannot_decode_with_a_warning(caplo
         "Skipping the name 'xn--bad_label.a-label.example.' of 192.0.9.2 "
         "in zone a-label.example.: "
     )
+
+
+def skipped_names(caplog):
+    """(name, address, zone) of each name that the source skipped."""
+    pattern = re.compile(r"Skipping the name (.+) of (\S+) in zone (\S+): ")
+    return [
+        (ast.literal_eval(match[1]), match[2], match[3])
+        for message in source_warnings(caplog)
+        if (match := pattern.match(message))
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "skipped"),
+    [
+        (
+            "free-text",
+            [
+                ("see wiki.free-text.example.", "192.0.17.3", "free-text.example."),
+                ("reserved for new printer.", "192.0.17.2", "17.0.192.in-addr.arpa."),
+            ],
+        ),
+        (
+            "dns-name-unusable",
+            [
+                ("gateway.", "192.0.18.2", "18.0.192.in-addr.arpa."),
+                ("*.", "192.0.18.3", "18.0.192.in-addr.arpa."),
+                (
+                    "*.dns-name-unusable.example.",
+                    "192.0.18.4",
+                    "18.0.192.in-addr.arpa.",
+                ),
+            ],
+        ),
+    ],
+)
+def test_populate_skips_a_name_that_octodns_rejects_with_a_warning(
+    caplog, name, skipped
+):
+    # octoDNS rejects the record name "see wiki", and the PTR values of free
+    # text, of a name with one label, and of a wildcard. The other names and
+    # addresses keep their records, as tests/live/expected/<name>/ shows.
+    case = load_case(name)
+    source = connect(case)
+    for zone_name in case["zones"]:
+        populate(source, case, zone_name)
+    assert skipped_names(caplog) == skipped
+
+
+def test_populate_keeps_a_name_that_octodns_rejects_when_lenient(caplog):
+    # A lenient octoDNS keeps a record that fails its validation, and logs
+    # why. The source keeps the name as well.
+    case = load_case("free-text")
+    source = connect(case)
+    forward = populate(source, case, "free-text.example.", lenient=True)
+    reverse = populate(source, case, "17.0.192.in-addr.arpa.", lenient=True)
+    assert {(r.name, tuple(r.values)) for r in forward.records} == {
+        ("host", ("192.0.17.1", "192.0.17.3")),
+        ("see wiki", ("192.0.17.3",)),
+    }
+    assert {(r.name, tuple(r.values)) for r in reverse.records} == {
+        ("1", ("host.free-text.example.",)),
+        ("2", ("reserved for new printer.",)),
+        ("3", ("host.free-text.example.",)),
+    }
+    assert skipped_names(caplog) == []
+
+
+def octodns_raises_idna_error(zone_name, name):
+    """Whether octoDNS raises IdnaError for an A record with the name.
+
+    octoDNS 1.10 to 1.12 decode the whole FQDN of a record for the message of
+    a validation error, also when lenient, and later releases decode each
+    label. Whether IDNA rejects a long name depends on the idna release.
+    """
+    zone = Zone(zone_name, [])
+    relative = name.removesuffix(f".{zone.name.rstrip('.')}")
+    data = {"type": "A", "ttl": 60, "value": "203.0.113.4"}
+    with pytest.raises((IdnaError, RecordValidationError)) as raised:
+        Record.new(zone, relative, data)
+    return raised.type is IdnaError
+
+
+@pytest.mark.parametrize("lenient", [False, True])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "bad name.xn--caf-dma.example",
+        ".".join(["a" * 60, "b" * 60, "c" * 60, "d" * 52, "xn--caf-dma.example"]),
+    ],
+    ids=["space", "too-long"],
+)
+def test_populate_keeps_the_other_records_when_octodns_cannot_decode_a_name(
+    caplog, name, lenient
+):
+    # octoDNS rejects the space, and a name of more than 253 characters. In
+    # zone café.example., octoDNS 1.10 to 1.12 can raise IdnaError in place of
+    # the validation error, and the source then skips the name in both modes.
+    case = load_case("idn")
+    zone_name = "café.example."
+    (exchange,) = case["zones"][zone_name]["exchanges"]
+    # 203.0.113.4 gets no record for its recorded name a\u200db.<zone> either.
+    (row,) = [
+        ip
+        for ip in exchange["response"]["json"]["results"]
+        if ip["address"] == "203.0.113.4/24"
+    ]
+    row["description"] = name
+    zone = populate(connect(case), case, zone_name, lenient=lenient)
+    records = {(r.fqdn, tuple(r.values)) for r in zone.records}
+    expected = expected_zone("idn", zone_name, []).records
+    others = {(r.fqdn, tuple(r.values)) for r in expected}
+    if lenient and not octodns_raises_idna_error(zone_name, name):
+        # A lenient octoDNS keeps the record, and so does the source.
+        assert records == others | {(f"{name}.", ("203.0.113.4",))}
+        assert skipped_names(caplog) == []
+    else:
+        assert records == others
+        assert skipped_names(caplog) == [
+            (f"{name}.", "203.0.113.4", "xn--caf-dma.example.")
+        ]
 
 
 def test_populate_fails_on_an_ipv6_zone_label_that_is_not_one_hex_digit():

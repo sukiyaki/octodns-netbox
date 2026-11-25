@@ -110,6 +110,41 @@ The PTR record of `192.0.9.2` points to `xn--bad_label.a-label.example.`.
 The source gives octoDNS each name as an FQDN, and octoDNS makes it relative to the zone.
 In zone `example.net.`, the name `web-example-net.example.net` becomes the record `web-example-net`.
 
+## Names that octoDNS rejects
+
+NetBox accepts any text in a description, and people write notes there, such as `Reserved for new printer`.
+octoDNS validates each record that the source gives it.
+One record that fails stops the zone, and `octodns-sync` then writes none of the zones in the run.
+
+The source therefore checks each name on its own.
+It builds the record of one name and one address with the same octoDNS call that builds the zone, and without lenient.
+When octoDNS rejects that record, the source skips the name for that address and logs octoDNS's reason:
+
+```text
+Skipping the name 'reserved for new printer.' of 192.0.17.2 in zone 17.0.192.in-addr.arpa.: PTR value "reserved for new printer." is not a valid FQDN, via: targets-value-rfc
+```
+
+In a forward zone, octoDNS checks the record name, and in a reverse zone, the PTR value.
+The other names of the IP address, and the other IP addresses with the same name, still get their records.
+The source adds no rule to the rules of octoDNS.
+A name that octoDNS accepts, such as the wildcard `*.example.com` or `_srv.example.com`, gets its record.
+octoDNS releases word their reasons in other ways, and do not all reject the same names.
+octoDNS 1.22 accepts the PTR value `{rack}.example.test.`, and octoDNS 1.10 rejects it.
+The source follows the octoDNS release that runs it, so with octoDNS 1.10 it skips that name with the warning above.
+
+With `lenient: true` on the zone, octoDNS keeps a record that fails its validation and logs a warning.
+The source then keeps the name too, as 0.5.0 did.
+
+octoDNS 1.10 to 1.12 decode the whole name of such a record for the warning, and for the error without lenient.
+In a zone with a label in IDNA form, such as `café.example.`, IDNA can then reject the name too, as it rejects `bad name.café.example`.
+Whether IDNA rejects a name that is only too long depends on the release of the idna package.
+When IDNA rejects the name, octoDNS stops with an `IdnaError`, in lenient mode too, and the zone gets no records.
+The source skips each name for which octoDNS raises an `IdnaError`, in both modes, with the reason that IDNA gives:
+
+```text
+Skipping the name 'bad name.xn--caf-dma.example.' of 203.0.113.4 in zone xn--caf-dma.example.: Codepoint U+0020 at position 4 of 'bad name' not allowed
+```
+
 ## Reverse zones
 
 ### The zone name gives the network

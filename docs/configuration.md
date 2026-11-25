@@ -112,6 +112,14 @@ An ASCII label only becomes lower case, so `höst.Ex_Ample.com` becomes `xn--hst
 The source skips a name with a label that has no IDNA form, and logs a warning that names it.
 In a forward zone, it also skips a name that octoDNS cannot decode, such as `xn--bad_label.example.com`, with the same warning.
 See [Names are in the form octoDNS uses](how-it-works.md#names-are-in-the-form-octodns-uses).
+
+The source also skips a name that octoDNS's validation rejects, with the same warning and the reason that octoDNS gives.
+In a forward zone, octoDNS checks the record name, such as `see wiki` in `see wiki.example.com`, a label longer than 63 characters, or `@`.
+In a reverse zone, octoDNS checks the PTR value, such as free text like `Reserved for new printer`, a name with one label like `gateway`, or `*`.
+The other names of the IP address, and the other IP addresses, still get their records.
+With `lenient: true` on the zone in the octoDNS config, octoDNS keeps such a record and logs a warning, and the source keeps the name.
+In a zone with a label in IDNA form, such as `café.example.`, octoDNS 1.10 to 1.12 can raise an `IdnaError` for such a name, in lenient mode too, and the source then skips the name in both modes.
+See [Names that octoDNS rejects](how-it-works.md#names-that-octodns-rejects).
 Custom fields are not supported.
 
 ### `populate_tags`

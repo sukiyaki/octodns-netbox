@@ -1,0 +1,9 @@
+---
+'1':
+  ttl: 60
+  type: PTR
+  value: host.free-text.example.
+'3':
+  ttl: 60
+  type: PTR
+  value: host.free-text.example.

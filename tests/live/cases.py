@@ -141,6 +141,12 @@ def cases(vrf_ids: dict[str, int]) -> list[Case]:
                 "populate_subdomains": "env/NETBOX_POPULATE_SUBDOMAINS",
             },
         ),
+        Case("free-text", ("free-text.example.", "17.0.192.in-addr.arpa.")),
+        Case(
+            "dns-name-unusable",
+            ("dns-name-unusable.example.", "18.0.192.in-addr.arpa."),
+            {"field_name": "dns_name"},
+        ),
     ]
 
 

@@ -14,8 +14,9 @@ from typing import Any, Literal, NamedTuple, Self, cast
 
 import pynetbox
 import requests
-from octodns.idna import IdnaError, idna_decode, idna_encode
+from octodns.idna import IdnaError, idna_encode
 from octodns.record import Record
+from octodns.record.exception import ValidationError as InvalidRecord
 from octodns.source.base import BaseSource
 from octodns.zone import SubzoneRecordException, Zone
 from pydantic import (
@@ -295,9 +296,9 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
         )
         before = len(zone.records)
         if reversename.is_reverse(zone):
-            rrs = self._ptr_records(zone)
+            rrs = self._ptr_records(zone, lenient)
         else:
-            rrs = self._forward_records(zone)
+            rrs = self._forward_records(zone, lenient)
 
         # Two NetBox IP addresses can give a record the same value, such as one
         # address and name in two VRFs. octoDNS keeps a value it gets twice,
@@ -316,7 +317,7 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
             "Populated %s new records in zone %s", len(zone.records) - before, zone.name
         )
 
-    def _ptr_records(self, zone: Zone) -> list[ResourceRecord]:
+    def _ptr_records(self, zone: Zone, lenient: bool) -> list[ResourceRecord]:
         field_name = self.config.field_name
         network = reversename.to_network(zone)
         ipam_records = self._ip_addresses(
@@ -340,11 +341,14 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
             names = _names(ipam_record[field_name])
             if not self.config.multivalue_ptr:
                 names = names[:1]
-            fqdns = self._octodns_fqdns(names, ip_address, zone)
-            for fqdn in fqdns:
+            fqdns = []
+            for fqdn in self._octodns_fqdns(names, ip_address, zone):
                 rr = ResourceRecord(ptr_name, "PTR", fqdn)
+                if not self._usable(rr, ip_address, zone, lenient):
+                    continue
                 self.log.debug("Adding PTR record %s to zone %s", rr, zone.name)
                 records.append(rr)
+                fqdns.append(fqdn)
             if fqdns:
                 nb_vrf = ipam_record.vrf
                 vrf = (nb_vrf.id, nb_vrf.name) if nb_vrf else (None, "Global")
@@ -371,7 +375,7 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                     )
         return records
 
-    def _forward_records(self, zone: Zone) -> list[ResourceRecord]:
+    def _forward_records(self, zone: Zone, lenient: bool) -> list[ResourceRecord]:
         field_name = self.config.field_name
         ipam_records = self._ip_addresses({f"{field_name}__ic": zone.name.rstrip(".")})
         records: list[ResourceRecord] = []
@@ -383,15 +387,9 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 if not self._fqdn_in_zone(fqdn, zone):
                     self.log.debug("Skip: FQDN=%s on zone %s", fqdn, zone.name)
                     continue
-                try:
-                    # octoDNS decodes each record name for its logs. An
-                    # IdnaError there, as for the invalid A-label xn--bad_label,
-                    # stops the whole zone, even when octoDNS is lenient.
-                    idna_decode(zone.hostname_from_fqdn(fqdn))
-                except IdnaError as error:
-                    self._skip_name(fqdn, ip_address, zone, error)
-                    continue
                 rr = ResourceRecord(fqdn, record_type, ip_address.compressed)
+                if not self._usable(rr, ip_address, zone, lenient):
+                    continue
                 self.log.debug(
                     "Created %s record %s for zone %s", record_type, rr, zone.name
                 )
@@ -423,19 +421,56 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 self._skip_name(name, ip_address, zone, error)
         return fqdns
 
+    def _usable(
+        self,
+        rr: ResourceRecord,
+        ip_address: IPv4Address | IPv6Address,
+        zone: Zone,
+        lenient: bool,
+    ) -> bool:
+        """Whether octoDNS accepts the record of one name of the IP address.
+
+        The source checks each name on its own, so a name that octoDNS rejects
+        takes no other name or address with it. With lenient, octoDNS keeps a
+        record that fails its validation, and so does the source.
+
+        octoDNS decodes the record name for its logs, and raises IdnaError,
+        also when lenient, for a name without a Unicode form, such as the
+        invalid A-label xn--bad_label. octoDNS 1.10 to 1.12 decode the whole
+        FQDN for the message of a validation error too, so in a zone such as
+        xn--caf-dma.example. a name that fails validation, such as "bad name",
+        raises IdnaError in place of the error. The source skips such a name
+        in both modes.
+        """
+        rdatas = {(rr.owner, rr.type): [rr.rdata]}
+        reason: IdnaError | str
+        try:
+            _octodns_records(zone, rdatas, self.config.ttl, lenient=False)
+        except InvalidRecord as error:
+            if lenient:
+                return True
+            reason = "; ".join(map(str, error.reasons))
+        except IdnaError as error:
+            reason = error
+        else:
+            return True
+        name = rr.rdata if rr.type == "PTR" else rr.owner
+        self._skip_name(name, ip_address, zone, reason)
+        return False
+
     def _skip_name(
         self,
         name: str,
         ip_address: IPv4Address | IPv6Address,
         zone: Zone,
-        error: IdnaError,
+        reason: IdnaError | str,
     ) -> None:
         self.log.warning(
             "Skipping the name %r of %s in zone %s: %s",
             name,
             ip_address,
             zone.name,
-            error,
+            reason,
         )
 
     def _fqdn_in_zone(self, fqdn: str, zone: Zone) -> bool:

@@ -284,6 +284,19 @@ IPS = (
     Ip("192.0.16.2/24", "host.vrf-dup.example", vrf=ANYCAST_VRF),
     Ip("2001:db8:16::1/64", "host.vrf-dup.example"),
     Ip("2001:db8:16::1/64", "host.vrf-dup.example", vrf=ANYCAST_VRF),
+    # Zones free-text.example. and 17.0.192.in-addr.arpa.: free text in the
+    # description next to names. octoDNS rejects "reserved for new printer."
+    # as a PTR value and "see wiki" as a record name.
+    Ip("192.0.17.1/24", "host.free-text.example"),
+    Ip("192.0.17.2/24", "Reserved for new printer"),
+    Ip("192.0.17.3/24", "host.free-text.example, see wiki.free-text.example"),
+    # Zones dns-name-unusable.example. and 18.0.192.in-addr.arpa.: DNS names
+    # that NetBox accepts and octoDNS rejects as PTR values. The wildcard is a
+    # valid record name.
+    Ip("192.0.18.1/24", dns_name="host.dns-name-unusable.example"),
+    Ip("192.0.18.2/24", dns_name="gateway"),
+    Ip("192.0.18.3/24", dns_name="*"),
+    Ip("192.0.18.4/24", dns_name="*.dns-name-unusable.example"),
 )
 
 

@@ -19,6 +19,8 @@ The source cannot be a target, and it never writes to NetBox.
 - It creates a PTR record for each IP address in a reverse zone.
   It handles IPv4 zones on octet boundaries, classless IPv4 zones in RFC 2317 and RFC 4183 form, and IPv6 nibble zones.
 - It can read only the IP addresses in one VRF, or only the IP addresses with given tags.
+- It skips a name that octoDNS rejects, such as free text in a description, and logs a warning.
+  The other records of the zone are still created.
 
 It creates no other record types.
 It reads nothing from NetBox except IP addresses and, when you name a VRF, that VRF.
