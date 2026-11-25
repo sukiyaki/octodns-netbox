@@ -89,6 +89,14 @@ The other names in the zone still get their records:
 Skipping the name 'a\u200db.xn--caf-dma.example.' of 203.0.113.4 in zone xn--caf-dma.example.: Joiner U+200D not allowed at position 2 in 'a\u200db'
 ```
 
+A name with an empty label has no meaning in DNS, and the source skips it with the same warning.
+octoDNS would make `.example.com` in zone `example.com.` the zone apex, next to the apex that `example.com` gives, and it accepts `.www` as a record name.
+The source checks the labels after the IDNA conversion, because IDNA turns a full-width dot (U+FF0E) into `.`: `www．.example.com` becomes `www..example.com.`.
+
+```text
+Skipping the name '.example.com.' of 192.0.2.1 in zone example.com.: empty label
+```
+
 octoDNS also decodes each record name back to Unicode for its logs.
 A label that starts with `xn--` but is not valid IDNA, such as `xn--bad_label`, has no Unicode form.
 octoDNS then stops with `IdnaError: Invalid A-label`, and the zone gets no records, in lenient mode too.

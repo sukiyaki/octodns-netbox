@@ -403,7 +403,7 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
 
         That is lower case, with each label that is not ASCII in IDNA form:
         höst.example. becomes xn--hst-sna.example. A name with a label that has
-        no IDNA form is left out, with a warning.
+        no IDNA form, or with an empty label, is left out, with a warning.
         """
         fqdns: list[str] = []
         for name in names:
@@ -416,9 +416,17 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 # convert the whole name, and IDNA rejects the "_" in an ASCII
                 # label such as ex_ample.
                 labels = name.lower().split(".")
-                fqdns.append(".".join(idna_encode(label) for label in labels))
+                fqdn = ".".join(idna_encode(label) for label in labels)
             except IdnaError as error:
                 self._skip_name(name, ip_address, zone, error)
+                continue
+            # octoDNS would make .example.com. the zone apex, and accepts .www
+            # as a record name. IDNA turns a full-width dot into ".", so the
+            # check comes after it.
+            if "" in fqdn.split(".")[:-1]:
+                self._skip_name(name, ip_address, zone, "empty label")
+                continue
+            fqdns.append(fqdn)
         return fqdns
 
     def _usable(

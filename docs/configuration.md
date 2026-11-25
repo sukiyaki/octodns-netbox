@@ -110,6 +110,7 @@ That form is in lower case, and each label that is not ASCII is in IDNA form.
 The source lower-cases the whole name, as octoDNS does, and then converts each label on its own.
 An ASCII label only becomes lower case, so `höst.Ex_Ample.com` becomes `xn--hst-sna.ex_ample.com.`.
 The source skips a name with a label that has no IDNA form, and logs a warning that names it.
+It skips a name with an empty label, such as `.example.com` or `a..example.com`, with the same warning, also when the zone is lenient.
 In a forward zone, it also skips a name that octoDNS cannot decode, such as `xn--bad_label.example.com`, with the same warning.
 See [Names are in the form octoDNS uses](how-it-works.md#names-are-in-the-form-octodns-uses).
 

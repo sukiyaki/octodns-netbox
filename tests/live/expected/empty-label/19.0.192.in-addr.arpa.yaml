@@ -1,0 +1,9 @@
+---
+'2':
+  ttl: 60
+  type: PTR
+  value: leading-dot.example.
+'3':
+  ttl: 60
+  type: PTR
+  value: www.leading-dot.example.

@@ -297,6 +297,14 @@ IPS = (
     Ip("192.0.18.2/24", dns_name="gateway"),
     Ip("192.0.18.3/24", dns_name="*"),
     Ip("192.0.18.4/24", dns_name="*.dns-name-unusable.example"),
+    # Zones leading-dot.example. and 19.0.192.in-addr.arpa.: names with an
+    # empty label next to the zone name itself. IDNA turns the full-width dot
+    # of "www\uff0e" into ".", which leaves an empty label after it.
+    Ip("192.0.19.1/24", ".leading-dot.example"),
+    Ip("192.0.19.2/24", "leading-dot.example"),
+    Ip("192.0.19.3/24", "www.leading-dot.example, .www.leading-dot.example"),
+    Ip("192.0.19.4/24", "a..leading-dot.example"),
+    Ip("192.0.19.5/24", "www\uff0e.leading-dot.example"),
 )
 
 

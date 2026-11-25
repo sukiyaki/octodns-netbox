@@ -147,6 +147,7 @@ def cases(vrf_ids: dict[str, int]) -> list[Case]:
             ("dns-name-unusable.example.", "18.0.192.in-addr.arpa."),
             {"field_name": "dns_name"},
         ),
+        Case("empty-label", ("leading-dot.example.", "19.0.192.in-addr.arpa.")),
     ]
 
 

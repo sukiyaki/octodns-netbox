@@ -705,6 +705,29 @@ def test_populate_skips_a_name_that_octodns_rejects_with_a_warning(
     assert skipped_names(caplog) == skipped
 
 
+@pytest.mark.parametrize("lenient", [False, True])
+def test_populate_skips_a_name_with_an_empty_label_with_a_warning(caplog, lenient):
+    # octoDNS would make .leading-dot.example. the apex, next to the apex of
+    # leading-dot.example, and accepts .www as a record name. IDNA turns the
+    # full-width dot of www． into ".".
+    case = load_case("empty-label")
+    source = connect(case)
+    forward = populate(source, case, "leading-dot.example.", lenient=lenient)
+    assert {(r.name, tuple(r.values)) for r in forward.records} == {
+        ("", ("192.0.19.2",)),
+        ("www", ("192.0.19.3",)),
+    }
+    assert skipped_names(caplog) == [
+        (name, address, "leading-dot.example.")
+        for name, address in [
+            (".leading-dot.example.", "192.0.19.1"),
+            (".www.leading-dot.example.", "192.0.19.3"),
+            ("a..leading-dot.example.", "192.0.19.4"),
+            ("www．.leading-dot.example.", "192.0.19.5"),
+        ]
+    ]
+
+
 def test_populate_keeps_a_name_that_octodns_rejects_when_lenient(caplog):
     # A lenient octoDNS keeps a record that fails its validation, and logs
     # why. The source keeps the name as well.
