@@ -52,7 +52,7 @@ def replaying(exchanges):
             )
             for exchange in exchanges
         ]
-        yield
+        yield mock
     assert [matcher.call_count for matcher in matchers] == [1] * len(matchers)
 
 
@@ -168,6 +168,50 @@ def test_init_error_contains_no_value_of_a_setting(settings):
     }
     for text in (str(error), error.json(), repr(error), repr(error.errors())):
         assert [piece for piece in pieces if piece in text] == []
+
+
+@pytest.mark.parametrize(
+    ("settings", "verify"), [({}, True), ({"ssl_verify": False}, False)]
+)
+def test_ssl_verify_sets_whether_each_request_verifies_tls(
+    monkeypatch, settings, verify
+):
+    # requests sends a CA bundle named in these variables instead of True.
+    monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
+    monkeypatch.delenv("CURL_CA_BUNDLE", raising=False)
+    case = load_case("vrf-name")
+    zone_name = "3.0.192.in-addr.arpa."
+    exchanges = case["init"] + case["zones"][zone_name]["exchanges"]
+    with replaying(exchanges) as mock:
+        source = NetboxSource("netbox", token="t", **case["source"], **settings)
+        source.populate(Zone(zone_name, []))
+    assert [request.verify for request in mock.request_history] == [verify] * 2
+
+
+@pytest.mark.parametrize("suffix", ["/api", "/api/"])
+def test_url_ending_in_api_sends_each_request_to_one_api_path(suffix):
+    case = load_case("url-api-suffix")
+    source = NetboxSource("netbox", token="t", url=f"http://netbox.example.com{suffix}")
+    assert source.config.url == "http://netbox.example.com"
+    assert_populates_expected_zones(source, case, "url-api-suffix")
+
+
+def test_init_takes_the_name_of_the_source_only_positionally():
+    with pytest.raises(TypeError):
+        NetboxSource(id="netbox", **SETTINGS)
+
+
+def test_config_of_a_source_cannot_change():
+    source = NetboxSource("netbox", **SETTINGS)
+    with pytest.raises(ValidationError):
+        source.config.ttl = 120
+    assert source.config.ttl == 60
+
+
+def test_supports_keys_leave_the_supported_types_and_geo_unchanged():
+    source = NetboxSource("netbox", **SETTINGS, SUPPORTS=["A"], SUPPORTS_GEO=True)
+    assert sorted(source.SUPPORTS) == ["A", "AAAA", "PTR"]
+    assert source.SUPPORTS_GEO is False
 
 
 def test_init_logs_no_warning_for_known_settings(caplog):
@@ -305,11 +349,16 @@ def test_init_fails_unless_one_vrf_has_the_populate_vrf_name(name, vrfs_with_the
         NetboxSource("netbox", token="not-recorded", **case["source"])
 
 
-def test_populate_warns_about_records_inside_a_configured_subzone(caplog):
+def test_populate_warns_once_for_each_record_inside_a_configured_subzone(caplog):
     case = load_case("subzones")
     assert case["zones"]["example.com."]["sub_zones"] == ["subdomain1"]
     populate(connect(case), case, "example.com.")
-    assert "Skipping subzone record" in caplog.text
+    # Zone example.com. leaves out the records of zone subdomain1.example.com.
+    left_out = expected_zone("subzones", "subdomain1.example.com.", []).records
+    assert len(left_out) == 3
+    assert sorted(source_warnings(caplog)) == sorted(
+        f"Skipping subzone record: {record!r}" for record in left_out
+    )
 
 
 def test_populate_skips_fqdn_that_only_shares_the_zone_suffix():
