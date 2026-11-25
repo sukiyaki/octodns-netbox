@@ -68,13 +68,32 @@ VrfFilter = int | Literal["global"] | None
 
 
 class _Session(requests.Session):
-    """A session whose verify setting is not replaced by the environment.
+    """A session that takes only proxies and a CA bundle from the environment.
+
+    requests also reads ~/.netrc, or the file in NETRC, for a request without
+    auth, and again on a redirect. It then sends a login from that file as a
+    Basic auth header in place of the token that pynetbox sets, and NetBox
+    answers 403.
 
     For a request without a verify argument, which is every request that
     pynetbox sends, requests takes the CA bundle in REQUESTS_CA_BUNDLE or
     CURL_CA_BUNDLE over Session.verify. ssl_verify: false would then still
     verify the certificate against that bundle.
     """
+
+    def __init__(self) -> None:
+        super().__init__()
+        # requests reads netrc only for a request without auth. This auth
+        # leaves the request as pynetbox made it.
+        self.auth = lambda request: request
+
+    def rebuild_auth(self, prepared_request: Any, response: Any) -> None:
+        """Drop the token on a redirect to another host, as requests does.
+
+        requests then reads netrc for the new URL, and this method does not.
+        """
+        if self.should_strip_auth(response.request.url, prepared_request.url):
+            prepared_request.headers.pop("Authorization", None)
 
     def merge_environment_settings(
         self, url: Any, proxies: Any, stream: Any, verify: Any, cert: Any
@@ -117,9 +136,15 @@ class NetboxSourceConfig(BaseModel):
     @field_validator("url", mode="before")
     @classmethod
     def http_url_without_api(cls, value: Any) -> str:
-        """pynetbox adds /api to the URL, so a trailing /api or /api/ is dropped."""
-        url = str(TypeAdapter(AnyHttpUrl).validate_python(value))
-        return re.sub(r"/api/?$", "", url)
+        """pynetbox adds /api to the URL, so a trailing /api or /api/ is dropped.
+
+        requests sends a user name or password in the URL as a Basic auth
+        header in place of the token, so such a URL cannot work.
+        """
+        url = TypeAdapter(AnyHttpUrl).validate_python(value)
+        if url.username or url.password:
+            raise ValueError("Remove the user name and password from the URL.")
+        return re.sub(r"/api/?$", "", str(url))
 
     @field_validator("populate_vrf_name")
     @classmethod

@@ -153,6 +153,10 @@ TOKEN = "nbt_K3yOfTheTest.S3cretOfTheTest0123456789"
             {"url": SETTINGS["url"], "token": TOKEN, "ttl": "ttl-value"},
             id="wrong-type",
         ),
+        pytest.param(
+            {"url": "http://netbox-user:S3cretOfTheUrl@netbox.example", "token": TOKEN},
+            id="url-with-password",
+        ),
     ],
 )
 def test_init_error_contains_no_value_of_a_setting(settings):
@@ -214,6 +218,64 @@ def test_ssl_verify_sets_whether_each_request_verifies_tls(
         for request in mock.request_history
     ]
     assert sent == [(verify, PROXY)] * 2
+
+
+V1_TOKEN = "0123456789abcdef0123456789abcdef01234567"
+
+
+@pytest.fixture
+def netrc(tmp_path, monkeypatch):
+    """A netrc file, which requests reads, with a login for every host."""
+    path = tmp_path / "netrc"
+    path.write_text("default login netrc-user password netrc-password\n")
+    monkeypatch.setenv("NETRC", str(path))
+
+
+def test_each_request_sends_the_token_and_no_login_from_netrc(netrc):
+    case = load_case("vrf-name")
+    zone_name = "3.0.192.in-addr.arpa."
+    exchanges = case["init"] + case["zones"][zone_name]["exchanges"]
+    with replaying(exchanges) as mock:
+        source = NetboxSource("netbox", token=V1_TOKEN, **case["source"])
+        source.populate(Zone(zone_name, []))
+    sent = [request.headers.get("Authorization") for request in mock.request_history]
+    assert sent == [f"Token {V1_TOKEN}"] * 2
+
+
+@pytest.mark.parametrize(
+    ("location", "authorization"),
+    [
+        pytest.param("https://netbox.example.com", f"Token {V1_TOKEN}", id="same-host"),
+        pytest.param("http://other.example.com", None, id="other-host"),
+    ],
+)
+def test_a_redirect_sends_the_token_only_to_the_same_host(
+    netrc, location, authorization
+):
+    case = load_case("vrf-name")
+    (exchange,) = case["init"]
+    url = exchange["request"]["url"]
+    moved = url.replace(case["source"]["url"], location)
+    with requests_mock.Mocker() as mock:
+        mock.get(url, complete_qs=True, status_code=301, headers={"Location": moved})
+        mock.get(moved, complete_qs=True, json=exchange["response"]["json"])
+        NetboxSource("netbox", token=V1_TOKEN, **case["source"])
+    first, redirected = mock.request_history
+    assert first.headers.get("Authorization") == f"Token {V1_TOKEN}"
+    assert redirected.url == moved
+    assert redirected.headers.get("Authorization") == authorization
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://netbox-user:netbox-password@netbox.example.com",
+        "http://netbox-user@netbox.example.com",
+        "http://:netbox-password@netbox.example.com",
+    ],
+)
+def test_init_rejects_a_url_with_a_user_name_or_password(url):
+    assert rejected_keys(url=url, token=V1_TOKEN) == {"url"}
 
 
 @pytest.mark.parametrize("suffix", ["/api", "/api/"])

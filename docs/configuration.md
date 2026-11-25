@@ -56,10 +56,20 @@ The URL of NetBox, with the scheme: `https://netbox.example.com`.
 The URL can end in `/api` or `/api/`.
 The source removes that suffix, because pynetbox adds `/api` itself.
 
+The URL cannot hold a user name or a password, such as `https://user:pass@netbox.example.com`.
+requests would send them in place of the token, and NetBox would refuse each request.
+The source stops at startup with a pydantic `ValidationError` on `url`.
+
 ### `token`
 
 The NetBox API token.
 The source sends only `GET` requests, so a token without write access is enough.
+
+The source authenticates to NetBox with the token alone.
+It ignores `~/.netrc` and the file that the environment variable `NETRC` names.
+requests would otherwise send a login from that file in place of the token.
+The source still uses the proxy settings in the environment, such as `HTTPS_PROXY`, and the CA bundle in `REQUESTS_CA_BUNDLE` or `CURL_CA_BUNDLE`.
+When NetBox redirects a request to another host, the source sends the redirected request without the token, as requests does.
 
 | Token | Format | Where |
 | --- | --- | --- |
@@ -170,6 +180,7 @@ octoDNS stops loading the config when the source raises one of these errors.
 | --- | --- |
 | `url` or `token` is missing | pydantic `ValidationError` that names the key |
 | A value has the wrong type, or `url` has no scheme | pydantic `ValidationError` that names the key |
+| `url` holds a user name or a password | pydantic `ValidationError` that names `url` |
 | Both VRF keys are set | `Do not set both populate_vrf_id and populate_vrf_name.` |
 | No VRF, or more than one VRF, has the name in `populate_vrf_name` | `Failed to retrieve VRF information by name '<name>'. Use a valid populate_vrf_id instead.` |
 
