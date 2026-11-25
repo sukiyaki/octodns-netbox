@@ -1,7 +1,9 @@
 # Every hook runs its tool from the project environment, so uv.lock pins each
 # tool and its dependencies, and pyproject.toml holds their settings. Each
 # hook's name, entry, file selection, and stages copy the hook of the same id
-# in pre-commit-hooks v6.0.0 and ruff-pre-commit v0.17.6.
+# in pre-commit-hooks v6.0.0, ruff-pre-commit v0.17.6, and zizmor-pre-commit
+# v1.33.1. The zizmor hook reads only the workflows, and it runs offline, so
+# it skips the audits that call the GitHub API.
 repos:
 - repo: local
   hooks:
@@ -76,3 +78,11 @@ repos:
     language: system
     files: ^octodns_netbox/
     pass_filenames: false
+  - id: zizmor
+    name: zizmor
+    entry: uv run --locked zizmor --offline
+    language: system
+    types: [yaml]
+    files: ^\.github/workflows/[^/]+\.ya?ml$
+    require_serial: true
+    args: [--no-progress]

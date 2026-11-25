@@ -38,7 +38,8 @@ You need these tools:
 uv run --locked pre-commit run --all-files
 ```
 
-The hooks run ruff, mypy in strict mode, and the checks of pre-commit-hooks.
+The hooks run ruff, mypy in strict mode, the checks of pre-commit-hooks, and zizmor.
+zizmor checks the workflows in `.github/workflows/` for security problems, offline.
 `uv.lock` pins each tool, and `pyproject.toml` holds their settings.
 
 ## Run the unit tests
