@@ -10,6 +10,17 @@ on:
 permissions:
   contents: read
 
+# A new commit on a pull request cancels the run of the older commit. A rerun,
+# which keeps the commit of its first attempt, and any other event get a group
+# of their own run, so they never cancel the newest commit's run, and the
+# schedule and a manual run are never cancelled and never wait.
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{ github.event_name == 'pull_request'
+    && github.run_attempt == '1' && github.event.pull_request.number
+    || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.run_attempt == '1' }}
+
 jobs:
   # CONTRIBUTING.md lists what each row checks that no other row checks.
   live:
