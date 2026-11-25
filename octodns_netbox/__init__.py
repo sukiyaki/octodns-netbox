@@ -225,9 +225,8 @@ class NetboxSource(BaseSource):  # type: ignore[misc]
                 self.log.warning("Unknown setting %s has no effect.", key)
 
         self.log.debug(
-            "Initializing NetboxSource: id=%s, url=%s, ttl=%s, ssl_verify=%s",
+            "Initializing NetboxSource: id=%s, ttl=%s, ssl_verify=%s",
             id,
-            self.config.url,
             self.config.ttl,
             self.config.ssl_verify,
         )

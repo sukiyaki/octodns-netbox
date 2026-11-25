@@ -72,6 +72,9 @@ requests would otherwise send a login from that file in place of the token.
 The source still uses the proxy settings in the environment, such as `HTTPS_PROXY`, and the CA bundle in `REQUESTS_CA_BUNDLE` or `CURL_CA_BUNDLE`.
 When NetBox redirects a request to another host, the source sends the redirected request without the token, as requests does.
 
+The log messages of the source hold neither the token nor the URL, at any log level.
+At the DEBUG level, urllib3 logs the host, the path, and the query string of each request that the source sends.
+
 | Token | Format | Where |
 | --- | --- | --- |
 | v1 | 40 hexadecimal characters | Every supported NetBox release |

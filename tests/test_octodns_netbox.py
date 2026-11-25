@@ -135,6 +135,21 @@ def test_init_rejects_both_populate_vrf_id_and_populate_vrf_name():
 TOKEN = "nbt_K3yOfTheTest.S3cretOfTheTest0123456789"
 
 
+def pieces_in(text, values):
+    """The pieces of 8 characters of the string values that text holds.
+
+    str() of a ValidationError shortens a long input to its start and end,
+    so a test looks for any piece of a value.
+    """
+    return [
+        value[i : i + 8]
+        for value in values
+        if isinstance(value, str)
+        for i in range(len(value) - 7)
+        if value[i : i + 8] in text
+    ]
+
+
 @pytest.mark.parametrize(
     "settings",
     [
@@ -171,15 +186,16 @@ def test_init_error_contains_no_value_of_a_setting(settings):
     with pytest.raises(ValidationError) as excinfo:
         NetboxSource("netbox", **settings)
     error = excinfo.value
-    # str() shortens a long input to its start and end, so look for any piece.
-    pieces = {
-        value[i : i + 8]
-        for value in settings.values()
-        if isinstance(value, str)
-        for i in range(len(value) - 7)
-    }
     for text in (str(error), error.json(), repr(error), repr(error.errors())):
-        assert [piece for piece in pieces if piece in text] == []
+        assert pieces_in(text, settings.values()) == []
+
+
+def test_init_logs_no_part_of_the_url_or_the_token(caplog):
+    caplog.set_level(logging.DEBUG)
+    settings = {"url": "https://netbox.example.com/S3cretPath", "token": TOKEN}
+    NetboxSource("netbox", **settings)
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert pieces_in(logged, settings.values()) == []
 
 
 BUNDLE = "/etc/ssl/netbox.pem"
